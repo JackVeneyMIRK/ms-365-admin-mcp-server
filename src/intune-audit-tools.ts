@@ -141,6 +141,7 @@ const tools: ReadTool[] = [
     schema: {
       policyId: uuid,
       deviceId: uuid,
+      userId: uuid,
     },
     path: () => '/deviceManagement/reports/getConfigurationSettingNonComplianceReport',
     reportName: 'ConfigurationSettingNonComplianceReport',
@@ -189,6 +190,7 @@ export function registerIntuneAuditTools(
         // Fixed, documented Intune report columns; identifiers are validated GUIDs.
         const policyId = String(params.policyId ?? '');
         const deviceId = String(params.deviceId ?? '');
+        const userId = String(params.userId ?? '');
         const policyReport = tool.name === 'get-intune-configuration-policy-noncompliance-report';
         const reportBody = policyReport
           ? {
@@ -208,7 +210,7 @@ export function registerIntuneAuditTools(
               top: 50,
             }
           : {
-              filter: `(PolicyId eq '${policyId}') and (DeviceId eq '${deviceId}')`,
+              filter: `(PolicyId eq '${policyId}') and (DeviceId eq '${deviceId}') and (UserId eq '${userId}')`,
               select: [],
               orderBy: ['SettingName'],
               skip: 0,
