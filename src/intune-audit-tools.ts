@@ -164,9 +164,7 @@ export function registerIntuneAuditTools(
       async (params) => {
         const result = await graphClient.graphRequest(tool.path(params), {
           method: tool.reportAction ? 'POST' : 'GET',
-          ...(tool.reportAction
-            ? { body: JSON.stringify({ select: [], skip: 0, top: 50 }) }
-            : {}),
+          ...(tool.reportAction ? { body: JSON.stringify({ select: [], skip: 0, top: 50 }) } : {}),
           apiVersion: tool.apiVersion ?? 'beta',
         });
         return wrapUntrustedContent(result, tool.name);
