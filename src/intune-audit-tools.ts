@@ -144,7 +144,8 @@ const tools: ReadTool[] = [
   },
   {
     name: 'get-intune-device-configuration-status-summary',
-    description: 'Read tenant-wide device configuration deployment totals, including conflict and error counts.',
+    description:
+      'Read tenant-wide device configuration deployment totals, including conflict and error counts.',
     schema: {},
     path: () => '/deviceManagement/deviceConfigurationDeviceStateSummaries',
     apiVersion: 'v1.0',
