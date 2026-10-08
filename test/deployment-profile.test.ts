@@ -15,7 +15,7 @@ const env = {
 };
 
 describe('locked Intune deployment profile', () => {
-  it('restricts exposure to the eight approved read-only Intune tools', () => {
+  it('restricts exposure to the fifteen approved Intune audit tools', () => {
     const allowed = [
       'list-intune-settings-catalog-policies',
       'get-intune-settings-catalog-policy',
@@ -25,6 +25,13 @@ describe('locked Intune deployment profile', () => {
       'list-intune-device-compliance-policies',
       'list-intune-device-configurations',
       'list-intune-device-encryption-states',
+      'list-intune-legacy-policy-assignments',
+      'list-intune-legacy-policy-device-statuses',
+      'list-intune-legacy-policy-setting-statuses',
+      'list-intune-compliance-policy-assignments',
+      'list-intune-compliance-policy-device-statuses',
+      'get-intune-configuration-policy-noncompliance-report',
+      'get-intune-configuration-setting-noncompliance-report',
     ];
     const regex = new RegExp(INTUNE_READ_TOOLS);
     for (const name of allowed) expect(regex.test(name)).toBe(true);
