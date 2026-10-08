@@ -93,7 +93,11 @@ class GraphClient {
     if (!response.ok) {
       const errorText = await response.text();
       // SEC-B: Log full error for debugging but return sanitized message to client
-      logger.error(`Graph API error ${response.status} on ${url.split('?')[0]}: ${errorText}`);
+      if (endpoint.startsWith('/deviceManagement/reports/')) {
+        logger.error(`Graph report error ${response.status} on ${url.split('?')[0]}`);
+      } else {
+        logger.error(`Graph API error ${response.status} on ${url.split('?')[0]}: ${errorText}`);
+      }
       let clientMessage = `Microsoft Graph API error: ${response.status} ${response.statusText}`;
       try {
         const parsed = JSON.parse(errorText) as { error?: { message?: string; code?: string } };
@@ -106,6 +110,12 @@ class GraphClient {
       } catch {
         // Non-JSON error body — don't leak raw text
       }
+      // Expose only Graph's opaque correlation identifiers for troubleshooting.
+      // Never forward raw response bodies, headers, tokens, or arbitrary innerError fields.
+      const correlation = response.headers.get('request-id');
+      const diagnosticId =
+        correlation && /^[a-f0-9-]{36}$/i.test(correlation) ? correlation : undefined;
+      if (diagnosticId) clientMessage += ` [request-id: ${diagnosticId}]`;
       throw new Error(clientMessage);
     }
 

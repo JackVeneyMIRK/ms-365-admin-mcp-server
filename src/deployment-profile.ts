@@ -2,7 +2,7 @@ import type { CommandOptions } from './cli.js';
 import { isValidRedirectUri } from './oauth-proxy.js';
 
 export const INTUNE_READ_TOOLS =
-  '^(list-intune-(settings-catalog-(policies|settings|assignments)|managed-devices|device-(compliance-policies|configurations|encryption-states)|legacy-policy-(assignments|device-statuses|setting-statuses)|compliance-policy-(assignments|device-statuses))|get-intune-(settings-catalog-policy|configuration-(policy|setting)-noncompliance-report))$';
+  '^(list-intune-(settings-catalog-(policies|settings|assignments)|managed-devices|device-(compliance-policies|configurations|encryption-states)|legacy-policy-(assignments|device-statuses|setting-statuses)|compliance-setting-status-summaries|device-configuration-status-summary|compliance-policy-(assignments|device-statuses))|get-intune-(settings-catalog-policy|device-configuration-status-summary|configuration-(policy|setting)-noncompliance-report))$';
 
 // This opt-in container profile is deliberately independent of general-purpose
 // flags. Environment overrides and future defaults must not broaden its tools.

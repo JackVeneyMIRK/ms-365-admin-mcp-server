@@ -8,7 +8,7 @@ do not grant consent, connect to a tenant, publish an image, or deploy the appli
 
 Set `MS365_ADMIN_MCP_DEPLOYMENT_PROFILE=intune-read-only` as a runtime variable.
 The Dockerfile's existing command then starts HTTP on port 8080 with OAuth, one
-allowlisted user, `access_as_user` enforcement, and exactly these fifteen tools:
+allowlisted user, `access_as_user` enforcement, and exactly these seventeen tools:
 
 - `list-intune-settings-catalog-policies`
 - `get-intune-settings-catalog-policy`
@@ -25,9 +25,11 @@ allowlisted user, `access_as_user` enforcement, and exactly these fifteen tools:
 - `list-intune-compliance-policy-device-statuses`
 - `get-intune-configuration-policy-noncompliance-report`
 - `get-intune-configuration-setting-noncompliance-report`
+- `get-intune-device-configuration-status-summary`
+- `list-intune-compliance-setting-status-summaries`
 
 The profile overrides general write flags, tool patterns, permissive tenant settings,
-and service-to-service authentication. Thirteen operations use delegated Graph GETs. Two fixed Microsoft Graph reporting actions use POST with a fixed, non-configuring report body. No arbitrary Graph URLs, write operations, or recovery keys are exposed.
+and service-to-service authentication. Fifteen operations use delegated Graph GETs. Two fixed Microsoft Graph reporting actions use POST with a fixed, non-configuring report body. No arbitrary Graph URLs, write operations, or recovery keys are exposed.
 Outside this profile, explicit `--read-only` or `READ_ONLY=true` also wins over write flags.
 
 Supply these runtime variables; never bake secrets into build arguments or commit them:
@@ -52,7 +54,7 @@ secrets or callback IDs are supplied by this repository.
 1. Create a single-tenant **Intune Audit MCP API** registration. Configure v2 access
    tokens and expose the delegated scope `api://<API_CLIENT_ID>/access_as_user`.
    Stage only Microsoft Graph **delegated** `DeviceManagementConfiguration.Read.All` and `DeviceManagementManagedDevices.Read.All`.
-   These support the fifteen audit routes; no Graph application or write permission is needed.
+   These support the seventeen audit routes; no Graph application or write permission is needed.
 2. Create a separate single-tenant **Intune Audit MCP OAuth Client** registration.
    Stage only the API app's delegated `access_as_user` permission. Configure the
    exact client callback as a **Web** redirect URI. This is a confidential client;
@@ -94,7 +96,7 @@ rejected in every mode. OAuth scopes are restricted to this API plus OIDC scopes
 - Plan a private test path first. A public ChatGPT connection needs reachability;
   do not expose the service to solve that until the launch conditions are confirmed.
 - Confirm health, unauthenticated rejection, tenant/audience/user rejection, scope
-  enforcement, exactly fifteen tools, unavailable write tools, one permitted read,
+  enforcement, exactly seventeen tools, unavailable write tools, one permitted read,
   refresh rotation and cross-client rejection. Exercise actual ChatGPT/Codex sign-in
   and refresh with the configured callback before calling the integration complete.
 

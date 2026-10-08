@@ -142,6 +142,22 @@ const tools: ReadTool[] = [
     apiVersion: 'v1.0',
     reportAction: true,
   },
+  {
+    name: 'get-intune-device-configuration-status-summary',
+    description:
+      'Read tenant-wide device configuration deployment totals, including conflict and error counts.',
+    schema: {},
+    path: () => '/deviceManagement/deviceConfigurationDeviceStateSummaries',
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'list-intune-compliance-setting-status-summaries',
+    description: 'Read per-setting compliance results for a specified legacy compliance policy.',
+    schema: { policyId: uuid },
+    path: ({ policyId }) =>
+      `/deviceManagement/deviceCompliancePolicies/${encodeURIComponent(String(policyId))}/deviceSettingStateSummaries`,
+    apiVersion: 'v1.0',
+  },
 ];
 
 /** Restrict tool exposure independently from Graph permissions and the read-only switch. */
