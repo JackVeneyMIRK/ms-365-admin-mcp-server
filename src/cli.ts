@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getCombinedPresetPattern, listPresets } from './tool-categories.js';
 import { parseMaxRiskLevel, type RiskLevel } from './risk-level.js';
+import { applyDeploymentProfile } from './deployment-profile.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJsonPath = path.join(__dirname, '..', 'package.json');
@@ -20,6 +21,11 @@ program
   .option('--verify-login', 'Verify login by testing client credentials against Graph API')
   .option('--read-only', 'Start server in read-only mode, disabling write operations (default)')
   .option('--allow-writes', 'Enable write operations (server is read-only by default)')
+  .option('--deployment-profile <name>', 'Use the locked intune-read-only container profile')
+  .option(
+    '--oauth-redirect-uris <uris>',
+    'Comma-separated exact redirect URIs allowed at DCR and authorization'
+  )
   .option(
     '--max-risk-level <level>',
     'Cap the risk level of registered tools (SEC-G01): low|medium|high|critical. Applies to both reads and writes. Implies --allow-writes. Default: no cap (equivalent to critical) when --allow-writes is set.'
@@ -95,6 +101,8 @@ export interface CommandOptions {
   requiredUserScopes?: string;
   dynamicRegistration?: boolean;
   logRedactUpn?: boolean;
+  deploymentProfile?: string;
+  oauthRedirectUris?: string;
   [key: string]: unknown;
 }
 
@@ -130,7 +138,10 @@ export function parseArgs(): CommandOptions {
   }
 
   // Default to read-only. --allow-writes (or --max-risk-level, or READ_ONLY=false) enables mutations.
-  if (options.allowWrites) {
+  if (options.readOnly || process.env.READ_ONLY === 'true' || process.env.READ_ONLY === '1') {
+    options.readOnly = true;
+    options.allowWrites = false;
+  } else if (options.allowWrites) {
     options.readOnly = false;
   } else if (process.env.READ_ONLY === 'false' || process.env.READ_ONLY === '0') {
     options.readOnly = false;
@@ -141,6 +152,8 @@ export function parseArgs(): CommandOptions {
   if (process.env.ENABLED_TOOLS) {
     options.enabledTools = process.env.ENABLED_TOOLS;
   }
+
+  applyDeploymentProfile(options);
 
   // SEC-11: Validate regex early and limit complexity to prevent ReDoS
   if (options.enabledTools) {

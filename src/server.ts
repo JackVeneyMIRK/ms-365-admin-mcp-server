@@ -136,10 +136,7 @@ class AdminGraphServer {
       // SEC-F03: default to requiring `access_as_user` in scp. An empty string disables the check.
       // The CLI flag wins; otherwise fall back to MS365_ADMIN_MCP_REQUIRED_USER_SCOPES so a
       // container deployment can tune (or disable) the check without rewriting startup args.
-      // Disabling is required in self-resource OAuth mode (no oauthClientId): refresh tokens
-      // come back via `{clientId}/.default` carrying Graph delegated scopes, never
-      // `access_as_user`. With a dedicated OAuth client app, refresh yields `access_as_user`
-      // and this check should be re-enabled (set back to `access_as_user`).
+      // OAuth requires a dedicated client app; Graph tokens are never MCP credentials.
       const rawRequiredScopes =
         this.options.requiredUserScopes ?? process.env.MS365_ADMIN_MCP_REQUIRED_USER_SCOPES;
       const requiredScopes =
@@ -153,11 +150,7 @@ class AdminGraphServer {
       const userTokenValidatorOptions = this.options.oauthMode
         ? {
             tenantId: this.secrets!.tenantId,
-            expectedAudiences: [
-              this.secrets!.clientId,
-              `api://${this.secrets!.clientId}`,
-              '00000003-0000-0000-c000-000000000000',
-            ],
+            expectedAudiences: [this.secrets!.clientId, `api://${this.secrets!.clientId}`],
             authorizedUserOids,
             allowAnyTenantUser,
             requiredScopes,
@@ -177,6 +170,8 @@ class AdminGraphServer {
           clientSecret: this.secrets!.clientSecret,
           oauthClientId: this.secrets!.oauthClientId,
           oauthClientSecret: this.secrets!.oauthClientSecret,
+          allowedRedirectUris: this.options.oauthRedirectUris?.split(',').map((uri) => uri.trim()),
+          requireResource: this.options.deploymentProfile === 'intune-read-only',
           scopes: [
             'openid',
             'profile',
@@ -192,7 +187,7 @@ class AdminGraphServer {
       await startHttpServer({
         port,
         host: this.options.host || '127.0.0.1',
-        createServer: (userToken?: string) => this.createServer(userToken),
+        createServer: (userToken?: string, roles?: string[]) => this.createServer(userToken, roles),
         tokenValidatorOptions,
         userTokenValidatorOptions,
         oauthProxyOptions,

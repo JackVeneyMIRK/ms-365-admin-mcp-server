@@ -17,15 +17,10 @@ export interface AppSecrets {
   tenantId: string;
   clientSecret?: string;
   cloudType: CloudType;
-  // Optional dedicated OAuth *client* app, distinct from the resource app above
-  // (`clientId` is the protected resource: token audience + `api://{clientId}/access_as_user`).
-  // When set, the OAuth proxy authenticates to Entra as this client for the
-  // authorization_code / refresh_token / device_code flows. Because the client is
-  // then no longer the same app as the resource, a refresh can request
-  // `api://{resourceClientId}/access_as_user` without the self-reference that
-  // triggers AADSTS90009 — and the issued token carries `access_as_user`, letting
-  // SEC-F03 stay enabled. Leave unset to keep the single self-resource app
-  // (refresh falls back to `{clientId}/.default`; SEC-F03 must be disabled).
+  // Required by OAuth mode: a confidential client app distinct from the protected
+  // resource above. It requests api://{clientId}/access_as_user during login and
+  // refresh. Optional only for non-OAuth transports. Self-resource OAuth and
+  // incoming Microsoft Graph audience tokens are no longer supported.
   oauthClientId?: string;
   oauthClientSecret?: string;
 }

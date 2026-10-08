@@ -1,6 +1,6 @@
 import type { TableClient, TableServiceClient } from '@azure/data-tables';
 import logger from '../logger.js';
-import type { OAuthStorage, PkceEntry, RegisteredClient } from './oauth-storage.js';
+import type { OAuthStorage, PkceEntry, RegisteredClient, TokenBinding } from './oauth-storage.js';
 
 const PKCE_PARTITION = 'pkce';
 const DCR_PARTITION = 'dcr';
@@ -15,6 +15,8 @@ interface PkceEntity {
   // correlation. Optional — clients may omit it. Stored as '' when absent
   // because Azure Table Storage does not roundtrip undefined cleanly.
   clientState: string;
+  resource?: string;
+  scope?: string;
   expiresAt: number;
 }
 
@@ -28,6 +30,52 @@ interface ClientEntity {
 
 export class TableStorage implements OAuthStorage {
   constructor(private client: TableClient) {}
+
+  async saveTokenBinding(binding: TokenBinding): Promise<void> {
+    await this.client.createEntity({
+      ...binding,
+      partitionKey: `token-${binding.kind}`,
+      rowKey: binding.tokenHash,
+    });
+  }
+
+  async getTokenBinding(
+    kind: TokenBinding['kind'],
+    tokenHash: string,
+    clientId: string,
+    resource: string
+  ): Promise<TokenBinding | null> {
+    try {
+      const entry = await this.client.getEntity<TokenBinding>(`token-${kind}`, tokenHash);
+      return entry.expiresAt > Date.now() &&
+        entry.clientId === clientId &&
+        entry.resource === resource
+        ? entry
+        : null;
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 404) return null;
+      throw error;
+    }
+  }
+
+  async consumeTokenBinding(
+    kind: TokenBinding['kind'],
+    tokenHash: string,
+    clientId: string,
+    resource: string
+  ): Promise<TokenBinding | null> {
+    const entry = await this.getTokenBinding(kind, tokenHash, clientId, resource);
+    if (!entry) return null;
+    const etag = (entry as TokenBinding & { etag?: string }).etag;
+    if (!etag) throw new Error('Token binding is missing its concurrency tag');
+    try {
+      await this.client.deleteEntity(`token-${kind}`, tokenHash, { etag });
+      return entry;
+    } catch (error) {
+      if ([404, 412].includes((error as { statusCode: number }).statusCode)) return null;
+      throw error;
+    }
+  }
 
   static async create(options: {
     accountName?: string;
@@ -74,6 +122,8 @@ export class TableStorage implements OAuthStorage {
       redirectUri: entry.redirectUri,
       clientId: entry.clientId,
       clientState: entry.clientState ?? '',
+      resource: entry.resource,
+      scope: entry.scope,
       expiresAt: entry.expiresAt,
     };
     await this.client.upsertEntity(entity, 'Replace');
@@ -107,6 +157,8 @@ export class TableStorage implements OAuthStorage {
       redirectUri: entity.redirectUri,
       clientId: entity.clientId,
       clientState: entity.clientState || undefined,
+      resource: entity.resource,
+      scope: entity.scope,
       expiresAt: entity.expiresAt,
     };
   }
