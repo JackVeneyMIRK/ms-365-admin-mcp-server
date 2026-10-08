@@ -208,7 +208,7 @@ export function registerIntuneAuditTools(
               top: 50,
             }
           : {
-              filter: `(PolicyId eq '${policyId}') and (DeviceId eq '${deviceId}') and (UserId eq '00000000-0000-0000-0000-000000000000')`,
+              filter: `(PolicyId eq '${policyId}') and (DeviceId eq '${deviceId}')`,
               select: [],
               orderBy: ['SettingName'],
               skip: 0,
