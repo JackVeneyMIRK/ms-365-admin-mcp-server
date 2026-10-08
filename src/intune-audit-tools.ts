@@ -20,6 +20,7 @@ type ReadTool = {
   path: (params: Record<string, unknown>) => string;
   apiVersion?: 'v1.0' | 'beta';
   reportAction?: boolean;
+  reportName?: string;
 };
 
 const tools: ReadTool[] = [
@@ -127,6 +128,7 @@ const tools: ReadTool[] = [
       'Read configuration policy noncompliance reports; fixed Microsoft Graph report action only.',
     schema: {},
     path: () => '/deviceManagement/reports/getConfigurationPolicyNonComplianceReport',
+    reportName: 'ConfigurationPolicyNonComplianceReport',
     apiVersion: 'v1.0',
     reportAction: true,
   },
@@ -136,6 +138,7 @@ const tools: ReadTool[] = [
       'Read configuration setting noncompliance reports including conflict details; no writes.',
     schema: {},
     path: () => '/deviceManagement/reports/getConfigurationSettingNonComplianceReport',
+    reportName: 'ConfigurationSettingNonComplianceReport',
     apiVersion: 'v1.0',
     reportAction: true,
   },
@@ -164,7 +167,9 @@ export function registerIntuneAuditTools(
       async (params) => {
         const result = await graphClient.graphRequest(tool.path(params), {
           method: tool.reportAction ? 'POST' : 'GET',
-          ...(tool.reportAction ? { body: JSON.stringify({ select: [], skip: 0, top: 50 }) } : {}),
+          ...(tool.reportAction
+            ? { body: JSON.stringify({ name: tool.reportName, skip: 0, top: 50 }) }
+            : {}),
           apiVersion: tool.apiVersion ?? 'beta',
         });
         return wrapUntrustedContent(result, tool.name);
