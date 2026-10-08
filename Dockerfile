@@ -12,7 +12,9 @@ RUN addgroup --system --gid 1001 mcpgroup && \
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
-RUN mkdir -p /app/logs && chown mcpuser:mcpgroup /app/logs
+RUN mkdir -p /app/logs /data && \
+    chown mcpuser:mcpgroup /app/logs /data && \
+    chmod 0700 /data
 ENV MS365_ADMIN_MCP_LOG_DIR=/app/logs
 USER mcpuser
 EXPOSE 8080

@@ -34,6 +34,18 @@ jobs:
         run: npm test
       - name: Build deployment image without publishing
         run: docker build -t ms365-admin-mcp:validation .
+      - name: Verify SQLite volume survives container replacement as non-root
+        run: |
+          volume="oauth-sqlite-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker volume create "$volume"
+          trap 'docker volume rm "$volume" >/dev/null' EXIT
+          for phase in write read consumed; do
+            docker run --rm --network none \
+              -e OAUTH_SQLITE_PATH=/data/oauth.sqlite \
+              --mount "type=volume,source=$volume,target=/data" \
+              --mount "type=bind,source=$PWD/bin/check-sqlite-persistence.mjs,target=/app/bin/check-sqlite-persistence.mjs,readonly" \
+              ms365-admin-mcp:validation node /app/bin/check-sqlite-persistence.mjs "$phase"
+          done
       - name: Confirm deployment profile refuses missing credentials
         run: |
           if output=$(docker run --rm -e MS365_ADMIN_MCP_DEPLOYMENT_PROFILE=intune-read-only ms365-admin-mcp:validation 2>&1); then
