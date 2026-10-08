@@ -1,8 +1,8 @@
 /**
- * Read-only Intune Settings Catalog and endpoint-security policy inspection.
- * Graph: /beta/deviceManagement/configurationPolicies
+ * Read-only Intune configuration, compliance, managed-device, and encryption inspection.
+ * Graph: deviceManagement read endpoints on v1.0 and beta
  *
- * These tools deliberately accept policy IDs rather than arbitrary Graph paths.
+ * These tools use fixed Graph paths, with validated IDs for policy-specific reads.
  * They cannot make write requests or retrieve BitLocker recovery-key material.
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -18,6 +18,7 @@ type ReadTool = {
   description: string;
   schema: Record<string, z.ZodTypeAny>;
   path: (params: Record<string, unknown>) => string;
+  apiVersion?: 'v1.0' | 'beta';
 };
 
 const tools: ReadTool[] = [
@@ -47,6 +48,37 @@ const tools: ReadTool[] = [
     schema: { policyId: uuid },
     path: ({ policyId }) => `${base}/${encodeURIComponent(String(policyId))}/assignments`,
   },
+  {
+    name: 'list-intune-managed-devices',
+    description:
+      'Read Intune managed device inventory and compliance status. Results may be paginated; no remote actions or recovery keys.',
+    schema: {},
+    path: () => '/deviceManagement/managedDevices',
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'list-intune-device-compliance-policies',
+    description: 'Read Intune device compliance policy metadata.',
+    schema: {},
+    path: () => '/deviceManagement/deviceCompliancePolicies',
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'list-intune-device-configurations',
+    description:
+      'Read Intune legacy device configuration profiles (distinct from Settings Catalog).',
+    schema: {},
+    path: () => '/deviceManagement/deviceConfigurations',
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'list-intune-device-encryption-states',
+    description:
+      'Read device encryption status summaries; does not retrieve BitLocker recovery keys.',
+    schema: {},
+    path: () => '/deviceManagement/managedDeviceEncryptionStates',
+    apiVersion: 'beta',
+  },
 ];
 
 /** Restrict tool exposure independently from Graph permissions and the read-only switch. */
@@ -72,7 +104,7 @@ export function registerIntuneAuditTools(
       async (params) => {
         const result = await graphClient.graphRequest(tool.path(params), {
           method: 'GET',
-          apiVersion: 'beta',
+          apiVersion: tool.apiVersion ?? 'beta',
         });
         return wrapUntrustedContent(result, tool.name);
       }

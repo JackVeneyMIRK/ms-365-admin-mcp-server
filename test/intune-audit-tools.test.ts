@@ -12,11 +12,21 @@ describe('read-only Intune Settings Catalog tools', () => {
     expect(source).toContain('get-intune-settings-catalog-policy');
     expect(source).toContain('list-intune-settings-catalog-settings');
     expect(source).toContain('list-intune-settings-catalog-assignments');
+    for (const name of [
+      'list-intune-managed-devices',
+      'list-intune-device-compliance-policies',
+      'list-intune-device-configurations',
+      'list-intune-device-encryption-states',
+    ]) {
+      expect(source).toContain(name);
+    }
   });
 
   it('does not contain write requests or generic user-controlled URL parameters', () => {
     expect(source).toContain("method: 'GET'");
     expect(source).toContain("apiVersion: 'beta'");
+    expect(source).toContain("apiVersion: 'v1.0'");
+    expect(source).toContain("apiVersion: tool.apiVersion ?? 'beta'");
     expect(source).toContain('z.string().uuid()');
     expect(source).not.toMatch(/method:\s*['"](?:POST|PATCH|PUT|DELETE)['"]/);
   });
