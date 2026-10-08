@@ -8,15 +8,19 @@ do not grant consent, connect to a tenant, publish an image, or deploy the appli
 
 Set `MS365_ADMIN_MCP_DEPLOYMENT_PROFILE=intune-read-only` as a runtime variable.
 The Dockerfile's existing command then starts HTTP on port 8080 with OAuth, one
-allowlisted user, `access_as_user` enforcement, and exactly these four tools:
+allowlisted user, `access_as_user` enforcement, and exactly these eight tools:
 
 - `list-intune-settings-catalog-policies`
 - `get-intune-settings-catalog-policy`
 - `list-intune-settings-catalog-settings`
 - `list-intune-settings-catalog-assignments`
+- `list-intune-managed-devices`
+- `list-intune-device-compliance-policies`
+- `list-intune-device-configurations`
+- `list-intune-device-encryption-states`
 
 The profile overrides general write flags, tool patterns, permissive tenant settings,
-and service-to-service authentication. All four operations use delegated Graph GETs.
+and service-to-service authentication. All eight operations use delegated Graph GETs. No recovery keys are retrieved.
 Outside this profile, explicit `--read-only` or `READ_ONLY=true` also wins over write flags.
 
 Supply these runtime variables; never bake secrets into build arguments or commit them:
@@ -40,8 +44,8 @@ secrets or callback IDs are supplied by this repository.
 
 1. Create a single-tenant **Intune Audit MCP API** registration. Configure v2 access
    tokens and expose the delegated scope `api://<API_CLIENT_ID>/access_as_user`.
-   Stage only Microsoft Graph **delegated** `DeviceManagementConfiguration.Read.All`.
-   This supports the four audit routes; no Graph application or write permission is needed.
+   Stage only Microsoft Graph **delegated** `DeviceManagementConfiguration.Read.All` and `DeviceManagementManagedDevices.Read.All`.
+   These support the eight audit routes; no Graph application or write permission is needed.
 2. Create a separate single-tenant **Intune Audit MCP OAuth Client** registration.
    Stage only the API app's delegated `access_as_user` permission. Configure the
    exact client callback as a **Web** redirect URI. This is a confidential client;
@@ -83,7 +87,7 @@ rejected in every mode. OAuth scopes are restricted to this API plus OIDC scopes
 - Plan a private test path first. A public ChatGPT connection needs reachability;
   do not expose the service to solve that until the launch conditions are confirmed.
 - Confirm health, unauthenticated rejection, tenant/audience/user rejection, scope
-  enforcement, exactly four tools, unavailable write tools, one permitted read,
+  enforcement, exactly eight tools, unavailable write tools, one permitted read,
   refresh rotation and cross-client rejection. Exercise actual ChatGPT/Codex sign-in
   and refresh with the configured callback before calling the integration complete.
 
