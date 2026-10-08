@@ -12,7 +12,12 @@ describe('read-only Intune Settings Catalog tools', () => {
     expect(source).toContain('get-intune-settings-catalog-policy');
     expect(source).toContain('list-intune-settings-catalog-settings');
     expect(source).toContain('list-intune-settings-catalog-assignments');
-    for (const name of ['list-intune-managed-devices', 'list-intune-device-compliance-policies', 'list-intune-device-configurations', 'list-intune-device-encryption-states']) {
+    for (const name of [
+      'list-intune-managed-devices',
+      'list-intune-device-compliance-policies',
+      'list-intune-device-configurations',
+      'list-intune-device-encryption-states',
+    ]) {
       expect(source).toContain(name);
     }
   });
