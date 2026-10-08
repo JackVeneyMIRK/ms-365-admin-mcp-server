@@ -19,6 +19,7 @@ type ReadTool = {
   schema: Record<string, z.ZodTypeAny>;
   path: (params: Record<string, unknown>) => string;
   apiVersion?: 'v1.0' | 'beta';
+  reportAction?: boolean;
 };
 
 const tools: ReadTool[] = [
@@ -79,6 +80,65 @@ const tools: ReadTool[] = [
     path: () => '/deviceManagement/managedDeviceEncryptionStates',
     apiVersion: 'beta',
   },
+  {
+    name: 'list-intune-legacy-policy-assignments',
+    description: 'Read device and group assignments for one legacy Intune configuration profile.',
+    schema: { policyId: uuid },
+    path: ({ policyId }) =>
+      `/deviceManagement/deviceConfigurations/${encodeURIComponent(String(policyId))}/assignments`,
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'list-intune-legacy-policy-device-statuses',
+    description: 'Read per-device deployment results for one legacy configuration profile.',
+    schema: { policyId: uuid },
+    path: ({ policyId }) =>
+      `/deviceManagement/deviceConfigurations/${encodeURIComponent(String(policyId))}/deviceStatuses`,
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'list-intune-legacy-policy-setting-statuses',
+    description:
+      'Read per-setting success, error, and conflict counts for a legacy configuration profile.',
+    schema: { policyId: uuid },
+    path: ({ policyId }) =>
+      `/deviceManagement/deviceConfigurations/${encodeURIComponent(String(policyId))}/deviceSettingStateSummaries`,
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'list-intune-compliance-policy-assignments',
+    description: 'Read Intune device compliance policy assignments.',
+    schema: { policyId: uuid },
+    path: ({ policyId }) =>
+      `/deviceManagement/deviceCompliancePolicies/${encodeURIComponent(String(policyId))}/assignments`,
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'list-intune-compliance-policy-device-statuses',
+    description: 'Read per-device compliance results for one Intune compliance policy.',
+    schema: { policyId: uuid },
+    path: ({ policyId }) =>
+      `/deviceManagement/deviceCompliancePolicies/${encodeURIComponent(String(policyId))}/deviceStatuses`,
+    apiVersion: 'v1.0',
+  },
+  {
+    name: 'get-intune-configuration-policy-noncompliance-report',
+    description:
+      'Read configuration policy noncompliance reports; fixed Microsoft Graph report action only.',
+    schema: {},
+    path: () => '/deviceManagement/reports/getConfigurationPolicyNonComplianceReport',
+    apiVersion: 'v1.0',
+    reportAction: true,
+  },
+  {
+    name: 'get-intune-configuration-setting-noncompliance-report',
+    description:
+      'Read configuration setting noncompliance reports including conflict details; no writes.',
+    schema: {},
+    path: () => '/deviceManagement/reports/getConfigurationSettingNonComplianceReport',
+    apiVersion: 'v1.0',
+    reportAction: true,
+  },
 ];
 
 /** Restrict tool exposure independently from Graph permissions and the read-only switch. */
@@ -103,7 +163,8 @@ export function registerIntuneAuditTools(
       },
       async (params) => {
         const result = await graphClient.graphRequest(tool.path(params), {
-          method: 'GET',
+          method: tool.reportAction ? 'POST' : 'GET',
+          ...(tool.reportAction ? { body: JSON.stringify({ select: [], skip: 0, top: 50 }) } : {}),
           apiVersion: tool.apiVersion ?? 'beta',
         });
         return wrapUntrustedContent(result, tool.name);
