@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Apply nonbreaking npm audit fixes
-        run: npm audit fix
+        run: npm audit fix || true
       - name: Enforce production audit
         run: npm audit --omit=dev --audit-level=high
       - name: Verify
