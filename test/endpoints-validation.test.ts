@@ -13,6 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 interface Endpoint {
+  disabled?: boolean;
   toolName: string;
   pathPattern: string;
   method: string;
@@ -22,9 +23,10 @@ interface Endpoint {
   riskLevel?: 'low' | 'medium' | 'high' | 'critical';
 }
 
-const endpoints: Endpoint[] = JSON.parse(
+const allEndpoints: Endpoint[] = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'src', 'endpoints.json'), 'utf8')
 );
+const endpoints = allEndpoints.filter((endpoint) => !endpoint.disabled);
 
 describe('endpoints.json validation', () => {
   it('should use appPermissions only (no scopes or workScopes)', () => {

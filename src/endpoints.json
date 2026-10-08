@@ -4713,6 +4713,7 @@
     "pathPattern": "/copilot/reports/getMicrosoft365CopilotUsageUserDetail(period='{period}')",
     "method": "get",
     "toolName": "get-copilot-usage-user-detail",
+    "disabled": true,
     "appPermissions": ["Reports.Read.All"],
     "llmTip": "Gets per-user Microsoft 365 Copilot usage detail over a period — for adoption tracking and license utilization analysis. period: 'D7' | 'D30' | 'D90' | 'D180'. Returns one row per user (UPN, display name, last activity date, last activity dates per Copilot-enabled app: Outlook, Teams, Word, Excel, PowerPoint, OneNote, Loop, M365 Chat). Useful for: identifying inactive license assignments (Copilot license costs ~$30 USD/user/month → ROI analysis), spotting power users vs dormant, planning training rollouts. Anonymized at the org level if 'Display concealed names in reports' is enabled in admin center."
   },
@@ -4720,6 +4721,7 @@
     "pathPattern": "/copilot/reports/getMicrosoft365CopilotUserCountSummary(period='{period}')",
     "method": "get",
     "toolName": "get-copilot-user-count-summary",
+    "disabled": true,
     "appPermissions": ["Reports.Read.All"],
     "llmTip": "Gets the Microsoft 365 Copilot user count summary over a period (D7/D30/D90/D180). Returns active vs. total enabled counts per Copilot-integrated app. Higher-level than get-copilot-usage-user-detail — gives the top-line adoption number without per-user names. Use for executive reporting / KPI dashboards (% adoption among licensed users)."
   },
@@ -4727,6 +4729,7 @@
     "pathPattern": "/copilot/reports/getMicrosoft365CopilotUserCountTrend(period='{period}')",
     "method": "get",
     "toolName": "get-copilot-user-count-trend",
+    "disabled": true,
     "appPermissions": ["Reports.Read.All"],
     "llmTip": "Gets the Microsoft 365 Copilot user count trend (time series) over a period (D7/D30/D90/D180). Returns one data point per day with active counts per app. Use for trend reporting (week-over-week adoption growth, post-training adoption bump, Friday usage drop, etc.). Pair with get-copilot-user-count-summary (snapshot) for full adoption picture."
   },
@@ -4783,6 +4786,7 @@
     "pathPattern": "/copilot/agentRegistrations",
     "method": "get",
     "toolName": "list-copilot-agent-registrations",
+    "disabled": true,
     "appPermissions": ["AgentRegistration.Read.All"],
     "apiVersion": "beta",
     "llmTip": "Lists registered Copilot agents (custom agents built via Copilot Studio or via partner integrations) in the tenant. Each has id, displayName, createdBy, sourceCreatedDateTime, sourceLastModifiedDateTime, agent card manifest. Use as the entry point for AI governance — answer 'which Copilot agents are active in our tenant?' (equivalent of OAuth app inventory but for AI agents). Supports $filter, $top, $skip. Beta-only endpoint."
