@@ -106,6 +106,12 @@ class GraphClient {
       } catch {
         // Non-JSON error body — don't leak raw text
       }
+      // Expose only Graph's opaque correlation identifiers for troubleshooting.
+      // Never forward raw response bodies, headers, tokens, or arbitrary innerError fields.
+      const correlation = response.headers.get('request-id');
+      const diagnosticId =
+        correlation && /^[a-f0-9-]{36}$/i.test(correlation) ? correlation : undefined;
+      if (diagnosticId) clientMessage += ` [request-id: ${diagnosticId}]`;
       throw new Error(clientMessage);
     }
 
