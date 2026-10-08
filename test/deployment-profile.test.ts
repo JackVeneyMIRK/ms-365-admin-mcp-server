@@ -15,6 +15,23 @@ const env = {
 };
 
 describe('locked Intune deployment profile', () => {
+  it('restricts exposure to the eight approved read-only Intune tools', () => {
+    const allowed = [
+      'list-intune-settings-catalog-policies',
+      'get-intune-settings-catalog-policy',
+      'list-intune-settings-catalog-settings',
+      'list-intune-settings-catalog-assignments',
+      'list-intune-managed-devices',
+      'list-intune-device-compliance-policies',
+      'list-intune-device-configurations',
+      'list-intune-device-encryption-states',
+    ];
+    const regex = new RegExp(INTUNE_READ_TOOLS);
+    for (const name of allowed) expect(regex.test(name)).toBe(true);
+    for (const name of ['list-users', 'wipe-managed-device', 'get-bitlocker-recovery-key']) {
+      expect(regex.test(name)).toBe(false);
+    }
+  });
   it('cannot be broadened by general-purpose flags or environment overrides', () => {
     const options: CommandOptions = {
       allowWrites: true,
