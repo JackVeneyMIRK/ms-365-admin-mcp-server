@@ -127,11 +127,11 @@ const tools: ReadTool[] = [
     description:
       'Read configuration policy noncompliance reports; fixed Microsoft Graph report action only.',
     schema: {
-      diagnosticVariant: z.enum(['minimal', 'named', 'namedWithSelect']).default('minimal'),
+      policyId: uuid,
     },
     path: () => '/deviceManagement/reports/getConfigurationPolicyNonComplianceReport',
     reportName: 'ConfigurationPolicyNonComplianceReport',
-    apiVersion: 'v1.0',
+    apiVersion: 'beta',
     reportAction: true,
   },
   {
@@ -139,7 +139,8 @@ const tools: ReadTool[] = [
     description:
       'Read configuration setting noncompliance reports including conflict details; no writes.',
     schema: {
-      diagnosticVariant: z.enum(['minimal', 'named', 'namedWithSelect']).default('minimal'),
+      policyId: uuid,
+      deviceId: uuid,
     },
     path: () => '/deviceManagement/reports/getConfigurationSettingNonComplianceReport',
     reportName: 'ConfigurationSettingNonComplianceReport',
@@ -185,13 +186,34 @@ export function registerIntuneAuditTools(
         openWorldHint: true,
       },
       async (params) => {
-        const variant = params.diagnosticVariant ?? 'minimal';
-        const reportBody =
-          variant === 'namedWithSelect'
-            ? { name: tool.reportName, select: ['PolicyId'], skip: 0, top: 50 }
-            : variant === 'named'
-              ? { name: tool.reportName, skip: 0, top: 50 }
-              : { skip: 0, top: 50 };
+        // Fixed, documented Intune report columns; identifiers are validated GUIDs.
+        const policyId = String(params.policyId ?? '');
+        const deviceId = String(params.deviceId ?? '');
+        const policyReport = tool.name === 'get-intune-configuration-policy-noncompliance-report';
+        const reportBody = policyReport
+          ? {
+              filter: `(PolicyId eq '${policyId}')`,
+              orderBy: [],
+              select: [
+                'DeviceName',
+                'UPN',
+                'PolicyStatus',
+                'PspdpuLastModifiedTimeUtc',
+                'UserId',
+                'IntuneDeviceId',
+                'PolicyBaseTypeName',
+                'UnifiedPolicyPlatformType',
+              ],
+              skip: 0,
+              top: 50,
+            }
+          : {
+              filter: `(PolicyId eq '${policyId}') and (DeviceId eq '${deviceId}') and (UserId eq '00000000-0000-0000-0000-000000000000')`,
+              select: [],
+              orderBy: ['SettingName'],
+              skip: 0,
+              top: 50,
+            };
         const result = await graphClient.graphRequest(tool.path(params), {
           method: tool.reportAction ? 'POST' : 'GET',
           ...(tool.reportAction ? { body: JSON.stringify(reportBody) } : {}),
