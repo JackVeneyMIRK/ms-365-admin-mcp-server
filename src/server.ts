@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import logger, { enableConsoleLogging } from './logger.js';
 import { registerGraphTools } from './graph-tools.js';
+import { registerIntuneAuditTools } from './intune-audit-tools.js';
 import GraphClient from './graph-client.js';
 import AuthManager from './auth.js';
 import type { CommandOptions } from './cli.ts';
@@ -60,6 +61,7 @@ class AdminGraphServer {
       appOnlyGraphClient,
       writeRiskTiers
     );
+    registerIntuneAuditTools(server, graphClient, this.options.enabledTools);
     return server;
   }
 
