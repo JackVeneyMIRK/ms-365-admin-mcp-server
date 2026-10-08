@@ -23,7 +23,7 @@ describe('read-only Intune Settings Catalog tools', () => {
   });
 
   it('allows only fixed Graph report action POSTs and otherwise GET requests', () => {
-    expect(source).toContain("reportAction: true");
+    expect(source).toContain('reportAction: true');
     expect(source).toContain("method: tool.reportAction ? 'POST' : 'GET'");
     expect(source).toContain('getConfigurationPolicyNonComplianceReport');
     expect(source).toContain('getConfigurationSettingNonComplianceReport');
