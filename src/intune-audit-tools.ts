@@ -50,7 +50,8 @@ const tools: ReadTool[] = [
   },
   {
     name: 'list-intune-managed-devices',
-    description: 'Read Intune managed device inventory and compliance status. Results may be paginated; no remote actions or recovery keys.',
+    description:
+      'Read Intune managed device inventory and compliance status. Results may be paginated; no remote actions or recovery keys.',
     schema: {},
     path: () => '/deviceManagement/managedDevices',
     apiVersion: 'v1.0',
