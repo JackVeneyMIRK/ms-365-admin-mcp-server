@@ -1,8 +1,8 @@
 /**
- * Read-only Intune Settings Catalog and endpoint-security policy inspection.
- * Graph: /beta/deviceManagement/configurationPolicies
+ * Read-only Intune configuration, compliance, managed-device, and encryption inspection.
+ * Graph: deviceManagement read endpoints on v1.0 and beta
  *
- * These tools deliberately accept policy IDs rather than arbitrary Graph paths.
+ * These tools use fixed Graph paths, with validated IDs for policy-specific reads.
  * They cannot make write requests or retrieve BitLocker recovery-key material.
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -101,7 +101,7 @@ export function registerIntuneAuditTools(
       async (params) => {
         const result = await graphClient.graphRequest(tool.path(params), {
           method: 'GET',
-          apiVersion: 'beta',
+          apiVersion: tool.apiVersion ?? 'beta',
         });
         return wrapUntrustedContent(result, tool.name);
       }
