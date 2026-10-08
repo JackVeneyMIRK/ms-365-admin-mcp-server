@@ -63,12 +63,17 @@ export function registerIntuneAuditTools(
       tool.name,
       tool.description,
       tool.schema,
-      { title: tool.name, readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+      {
+        title: tool.name,
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
       async (params) => {
-        const result = await graphClient.graphRequest(
-          tool.path(params),
-          { method: 'GET', apiVersion: 'beta' }
-        );
+        const result = await graphClient.graphRequest(tool.path(params), {
+          method: 'GET',
+          apiVersion: 'beta',
+        });
         return wrapUntrustedContent(result, tool.name);
       }
     );
