@@ -8,6 +8,13 @@ Tool counts in parentheses indicate the cumulative total after the change.
 
 ## [Unreleased]
 
+### Security
+
+- Bind OAuth refresh tokens and device codes to their original downstream client and resource, enforce one-shot refresh rotation, and reject unapproved redirects and scope escalation. OAuth now requires a separate confidential client app; the single-app/Graph-audience workaround and empty redirect registrations are no longer supported. Existing clients must sign in again.
+- Preserve caller roles when creating HTTP sessions and make explicit read-only settings take precedence over write flags.
+- Add the opt-in `intune-read-only` deployment profile with one user, exact callbacks, strict resource/scope checks and only four delegated audit tools. See [Coolify setup](docs/COOLIFY_INTUNE_READ_ONLY.md) for configuration, session lifetime and restart behavior.
+- Use Node 22 for the Docker image and validate supported Node 22/24 releases plus an unpublished Docker build in CI.
+
 ## [0.15.1] — 2026-07-31
 
 ### Security

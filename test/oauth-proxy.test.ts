@@ -3,6 +3,7 @@ import express from 'express';
 import type { Express, Server } from 'http';
 import crypto from 'crypto';
 import { registerOAuthRoutes, type OAuthProxyOptions } from '../src/oauth-proxy.js';
+import { hashClientSecret } from '../src/storage/oauth-storage.js';
 import { MemoryStorage } from '../src/storage/memory-storage.js';
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
@@ -28,6 +29,8 @@ async function buildServer(
     tenantId: TENANT,
     clientId: CLIENT_ID,
     clientSecret: 'upstream-entra-secret',
+    oauthClientId: '33333333-3333-3333-3333-333333333333',
+    oauthClientSecret: 'upstream-oauth-secret',
     scopes: ['openid', 'profile', 'email', 'offline_access', `api://${CLIENT_ID}/access_as_user`],
     enableDynamicRegistration: true,
     storage,
@@ -92,6 +95,7 @@ async function register(
     client_secret: string;
     token_endpoint_auth_method: string;
   };
+  await seedGrant(storage, 'refresh', body.client_id, body.client_id + '-legit-rt');
   expect(body.token_endpoint_auth_method).toBe('client_secret_post');
   return { clientId: body.client_id, clientSecret: body.client_secret };
 }
@@ -112,7 +116,7 @@ describe('SEC-F04b /register (DCR) — confidential client issuance', () => {
 describe('SEC-F04b /authorize — unknown client_id rejected', () => {
   it('rejects client_id that was not registered via DCR', async () => {
     const res = await realFetch(
-      `${baseUrl}/authorize?client_id=unknown&redirect_uri=http%3A%2F%2Flocalhost%2Fcb&code_challenge=xyz`,
+      `${baseUrl}/authorize?client_id=unknown&redirect_uri=http%3A%2F%2Flocalhost%2Fcb&code_challenge=${'a'.repeat(43)}&code_challenge_method=S256`,
       { redirect: 'manual' }
     );
     expect(res.status).toBe(400);
@@ -213,17 +217,20 @@ describe('SEC-F04b /token — client authentication required', () => {
   it('accepts refresh_token grant with valid credentials and forwards to Entra', async () => {
     const { clientId, clientSecret } = await register();
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ access_token: 'new-at', refresh_token: 'new-rt' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({ access_token: 'new-at', refresh_token: clientId + '-new-rt' }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     );
     const res = await realFetch(`${baseUrl}/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: 'legit-rt',
+        refresh_token: clientId + '-legit-rt',
         client_id: clientId,
         client_secret: clientSecret,
       }),
@@ -234,47 +241,10 @@ describe('SEC-F04b /token — client authentication required', () => {
     expect(body.access_token).toBe('new-at');
   });
 
-  // AADSTS90009 regression — SELF-RESOURCE mode (no dedicated OAuth client app).
-  // The app reg is both client and resource; Entra honours refresh only when the
-  // resource is named by its GUID-based app identifier with /.default. Forwarding
-  // the per-scope value, the api:// URI .default form, or omitting scope all fail
-  // (confirmed in prod). The refresh branch must rewrite to {clientId}/.default.
-  it('uses {clientId}/.default GUID form on refresh in self-resource mode (AADSTS90009)', async () => {
-    const { clientId, clientSecret } = await register();
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ access_token: 'new-at', refresh_token: 'new-rt' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    );
-    const res = await realFetch(`${baseUrl}/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: 'legit-rt',
-        // mcp-remote re-sends the granted per-scope value; the proxy must NOT
-        // forward it — it is exactly what triggers AADSTS90009.
-        scope: `api://${CLIENT_ID}/access_as_user`,
-        client_id: clientId,
-        client_secret: clientSecret,
-      }),
-    });
-    expect(res.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const upstreamBody = new URLSearchParams(
-      String((fetchMock.mock.calls[0][1] as { body: string }).body)
-    );
-    expect(upstreamBody.get('grant_type')).toBe('refresh_token');
-    expect(upstreamBody.get('refresh_token')).toBe('legit-rt');
-    // GUID-form resource /.default — not the api:// URI form, not the per-scope value.
-    const upstreamScope = (upstreamBody.get('scope') ?? '').split(/\s+/).filter(Boolean);
-    expect(upstreamScope).toContain(`${CLIENT_ID}/.default`);
-    expect(upstreamScope).toContain('offline_access');
-    expect(upstreamScope).not.toContain(`api://${CLIENT_ID}/.default`);
-    expect(upstreamScope).not.toContain(`api://${CLIENT_ID}/access_as_user`);
-    // Self-resource mode authenticates upstream as the resource app itself.
-    expect(upstreamBody.get('client_id')).toBe(CLIENT_ID);
+  it('refuses the self-resource OAuth configuration', async () => {
+    await expect(
+      buildServer(new MemoryStorage(), { oauthClientId: undefined, oauthClientSecret: undefined })
+    ).rejects.toThrow(/separate OAuth client/);
   });
 
   it('accepts Basic auth (client_secret_basic) as an alternative to body auth', async () => {
@@ -291,7 +261,10 @@ describe('SEC-F04b /token — client authentication required', () => {
         'Content-Type': 'application/x-www-form-urlencoded',
         Authorization: `Basic ${basic}`,
       },
-      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: 'rt' }),
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: clientId + '-legit-rt',
+      }),
     });
     expect(res.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -361,16 +334,22 @@ describe('SEC-F04c (SEC-002) /authorize — redirect_uri must match DCR registra
     expect(location).toContain('login.microsoftonline.com');
   });
 
-  it('skips redirect_uri enforcement when client registered with empty redirect_uris (legacy compat)', async () => {
-    const { clientId } = await register([]);
-    const verifier = base64url(crypto.randomBytes(64));
-    const challenge = sha256(verifier);
-
+  it('rejects legacy clients with no registered redirect URIs', async () => {
+    const { clientId } = await register();
+    const registered = await storage.getClient(clientId);
+    await storage.saveClient({ ...registered!, redirectUris: [] });
     const res = await realFetch(
-      `${baseUrl}/authorize?client_id=${clientId}&redirect_uri=http%3A%2F%2Fanything%2Fcb&code_challenge=${challenge}&code_challenge_method=S256`,
+      baseUrl +
+        '/authorize?' +
+        new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: 'http://localhost/cb',
+          code_challenge: sha256('x'.repeat(43)),
+          code_challenge_method: 'S256',
+        }),
       { redirect: 'manual' }
     );
-    expect(res.status).toBe(302);
+    expect(res.status).toBe(400);
   });
 });
 
@@ -535,7 +514,7 @@ describe('RFC 8628 /devicecode — client authentication required', () => {
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
-          device_code: 'entra-device-code',
+          device_code: 'entra-device-code-' + clientId,
           user_code: 'ABCD-1234',
           verification_uri: 'https://microsoft.com/devicelogin',
           expires_in: 900,
@@ -565,7 +544,7 @@ describe('RFC 8628 /devicecode — client authentication required', () => {
   it('preserves offline_access without duplicating when the client sends it', async () => {
     const { clientId, clientSecret } = await register();
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ device_code: 'x' }), { status: 200 })
+      new Response(JSON.stringify({ device_code: 'x', expires_in: 900 }), { status: 200 })
     );
     const res = await realFetch(`${baseUrl}/devicecode`, {
       method: 'POST',
@@ -633,6 +612,7 @@ describe('RFC 8628 /token device_code grant', () => {
 
   it('forwards a valid device_code grant to Entra and returns the token bundle', async () => {
     const { clientId, clientSecret } = await register();
+    await seedGrant(storage, 'device', clientId, 'entra-device-code-' + clientId);
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -649,7 +629,7 @@ describe('RFC 8628 /token device_code grant', () => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: GRANT,
-        device_code: 'entra-device-code',
+        device_code: 'entra-device-code-' + clientId,
         client_id: clientId,
         client_secret: clientSecret,
       }),
@@ -664,11 +644,12 @@ describe('RFC 8628 /token device_code grant', () => {
     expect(calledUrl).toContain('/oauth2/v2.0/token');
     const forwarded = new URLSearchParams(calledInit.body);
     expect(forwarded.get('grant_type')).toBe(GRANT);
-    expect(forwarded.get('device_code')).toBe('entra-device-code');
+    expect(forwarded.get('device_code')).toBe('entra-device-code-' + clientId);
   });
 
   it('relays authorization_pending from Entra verbatim so the client can poll', async () => {
     const { clientId, clientSecret } = await register();
+    await seedGrant(storage, 'device', clientId, 'pending-code');
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -721,23 +702,27 @@ describe('Dedicated OAuth client app (separate client/resource)', () => {
       body: JSON.stringify({ redirect_uris: ['http://localhost/cb'] }),
     });
     const body = (await res.json()) as { client_id: string; client_secret: string };
+    await seedGrant(scStorage, 'refresh', body.client_id, body.client_id + '-legit-rt');
     return { clientId: body.client_id, clientSecret: body.client_secret };
   }
 
   it('authenticates upstream as the dedicated client and requests the resource per-scope on refresh', async () => {
     const { clientId, clientSecret } = await scRegister();
     fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ access_token: 'new-at', refresh_token: 'new-rt' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({ access_token: 'new-at', refresh_token: clientId + '-new-rt' }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     );
     const res = await realFetch(`${scUrl}/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: 'legit-rt',
+        refresh_token: clientId + '-legit-rt',
         client_id: clientId,
         client_secret: clientSecret,
       }),
@@ -774,3 +759,19 @@ describe('Dedicated OAuth client app (separate client/resource)', () => {
     expect(upstream.searchParams.get('scope')).toContain(`api://${CLIENT_ID}/access_as_user`);
   });
 });
+
+async function seedGrant(
+  store: MemoryStorage,
+  kind: 'refresh' | 'device',
+  clientId: string,
+  token: string
+) {
+  await store.saveTokenBinding({
+    kind,
+    tokenHash: hashClientSecret(token),
+    clientId,
+    resource: 'https://mcp.example.com/mcp',
+    scope: 'openid profile email offline_access api://' + CLIENT_ID + '/access_as_user',
+    expiresAt: Date.now() + 60_000,
+  });
+}

@@ -16,14 +16,12 @@ export interface OAuthProxyOptions {
   // The protected-resource app: token audience + `api://{clientId}/access_as_user`.
   clientId: string;
   clientSecret?: string;
-  // Optional dedicated OAuth *client* app (distinct from `clientId`). When set, the
-  // proxy authenticates to Entra as this client for authorization_code / refresh_token
-  // / device_code. This removes the client==resource self-reference, so refresh can
-  // request `api://{clientId}/access_as_user` without AADSTS90009 and the token carries
-  // `access_as_user`. When unset, the proxy uses `clientId`/`clientSecret` (self-resource
-  // mode) and refresh falls back to `{clientId}/.default`. See AppSecrets.oauthClientId.
+  // A distinct confidential client is required: never accept Graph tokens as
+  // MCP credentials or fall back to the self-resource /.default workaround.
   oauthClientId?: string;
   oauthClientSecret?: string;
+  allowedRedirectUris?: string[];
+  requireResource?: boolean;
   scopes: string[];
   enableDynamicRegistration: boolean;
   // SEC-F04b + SEC-F05: externalised storage for PKCE bridge + DCR client
@@ -34,6 +32,7 @@ export interface OAuthProxyOptions {
 }
 
 const PKCE_TTL_MS = 10 * 60 * 1000;
+const REFRESH_TTL_MS = 24 * 60 * 60 * 1000;
 const DEVICE_CODE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
 
 function base64url(buf: Buffer): string {
@@ -83,6 +82,23 @@ function extractClientCredentials(req: Request): { clientId?: string; clientSecr
   return { clientId: bodyId, clientSecret: bodySecret };
 }
 
+export function isValidRedirectUri(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return (
+      !url.hash &&
+      !value.includes('#') &&
+      !url.username &&
+      !url.password &&
+      (url.protocol === 'https:' ||
+        (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): void {
   // SEC-F02: refuse to register the OAuth surface without a trusted public URL.
   // The metadata endpoints would otherwise advertise an attacker-controllable
@@ -106,16 +122,59 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
   const storage = options.storage;
   const issuer = stripTrailingSlash(options.publicUrl);
   const authority = `https://login.microsoftonline.com/${options.tenantId}`;
-  // Upstream Entra client identity. Defaults to the resource app (self-resource mode)
-  // unless a dedicated OAuth client app is configured. `separateOAuthClient` gates the
-  // refresh-token scope strategy below (per-scope vs {clientId}/.default).
-  const upstreamClientId = options.oauthClientId ?? options.clientId;
-  const upstreamClientSecret = options.oauthClientSecret ?? options.clientSecret;
-  const separateOAuthClient = !!options.oauthClientId && options.oauthClientId !== options.clientId;
-  const fallbackScope =
-    options.scopes.length > 0
-      ? options.scopes.join(' ')
-      : `openid profile email offline_access api://${options.clientId}/access_as_user`;
+  const resource = issuer + '/mcp';
+  const parsedIssuer = new URL(issuer);
+  if (!isValidRedirectUri(issuer) || parsedIssuer.origin !== issuer) {
+    throw new Error('OAuth public URL must be an HTTPS origin (HTTP is allowed only on loopback)');
+  }
+  if (
+    !options.oauthClientId ||
+    options.oauthClientId === options.clientId ||
+    !options.oauthClientSecret
+  ) {
+    throw new Error('OAuth requires a separate OAuth client app and its client secret');
+  }
+  if (
+    options.allowedRedirectUris &&
+    (options.allowedRedirectUris.length === 0 ||
+      !options.allowedRedirectUris.every(isValidRedirectUri))
+  ) {
+    throw new Error('OAuth redirect allowlist must contain valid, exact redirect URIs');
+  }
+  const upstreamClientId = options.oauthClientId;
+  const upstreamClientSecret = options.oauthClientSecret;
+  const resourceScope = 'api://' + options.clientId + '/access_as_user';
+  const allowedScopes = options.scopes.length
+    ? options.scopes
+    : ['openid', 'profile', 'email', 'offline_access', resourceScope];
+  if (
+    !allowedScopes.includes(resourceScope) ||
+    !allowedScopes.includes('offline_access') ||
+    allowedScopes.some(
+      (s) => !['openid', 'profile', 'email', 'offline_access', resourceScope].includes(s)
+    )
+  ) {
+    throw new Error('OAuth scopes must target this MCP resource and include offline_access');
+  }
+  const fallbackScope = allowedScopes.join(' ');
+  function resolveScope(value: unknown, permitted = fallbackScope): string | null {
+    if (value === undefined) return permitted;
+    if (typeof value !== 'string' || !value.trim()) return null;
+    const scopes = value.trim().split(/\s+/);
+    if (scopes.some((s) => !permitted.split(' ').includes(s))) return null;
+    return [...new Set([...scopes, resourceScope, 'offline_access'])].join(' ');
+  }
+  function validResource(value: unknown): boolean {
+    return value === resource || (value === undefined && !options.requireResource);
+  }
+  function reject(res: Response, error: string, error_description: string): void {
+    res.status(400).json({ error, error_description });
+  }
+  app.use(['/register', '/authorize', '/devicecode', '/token'], (_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    res.set('Pragma', 'no-cache');
+    next();
+  });
 
   app.get('/.well-known/oauth-authorization-server', (_req: Request, res: Response) => {
     res.json({
@@ -137,19 +196,42 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
     });
   });
 
-  app.get('/.well-known/oauth-protected-resource', (_req: Request, res: Response) => {
-    res.json({
-      resource: `${issuer}/mcp`,
-      authorization_servers: [issuer],
-      bearer_methods_supported: ['header'],
-    });
-  });
+  app.get(
+    ['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'],
+    (_req: Request, res: Response) => {
+      res.json({
+        resource: `${issuer}/mcp`,
+        authorization_servers: [issuer],
+        bearer_methods_supported: ['header'],
+      });
+    }
+  );
 
   app.post('/register', async (req: Request, res: Response) => {
     const body = req.body ?? {};
     const clientId = `mcp-client-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const clientSecret = randomClientSecret();
-    const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
+    const redirectUris: unknown = body.redirect_uris;
+    if (
+      !Array.isArray(redirectUris) ||
+      redirectUris.length === 0 ||
+      redirectUris.length > 16 ||
+      !redirectUris.every(isValidRedirectUri) ||
+      (options.allowedRedirectUris &&
+        redirectUris.some((uri) => !options.allowedRedirectUris!.includes(uri)))
+    ) {
+      reject(
+        res,
+        'invalid_redirect_uri',
+        'Register at least one permitted, exact HTTPS or loopback redirect URI'
+      );
+      return;
+    }
+    const registrationScope = resolveScope(body.scope);
+    if (!registrationScope) {
+      reject(res, 'invalid_scope', 'Requested scope is not supported');
+      return;
+    }
 
     try {
       await storage.saveClient({
@@ -172,10 +254,10 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       client_secret_expires_at: 0,
       client_id_issued_at: Math.floor(Date.now() / 1000),
       redirect_uris: redirectUris,
-      grant_types: body.grant_types ?? ['authorization_code', 'refresh_token'],
-      response_types: body.response_types ?? ['code'],
+      grant_types: ['authorization_code', 'refresh_token', DEVICE_CODE_GRANT],
+      response_types: ['code'],
       token_endpoint_auth_method: 'client_secret_post',
-      scope: body.scope ?? fallbackScope,
+      scope: registrationScope,
     });
   });
 
@@ -209,13 +291,15 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
     }
 
     const body = req.body ?? {};
-    const requestedScope =
-      typeof body.scope === 'string' && body.scope.length > 0 ? body.scope : fallbackScope;
-    const scopeList = requestedScope.split(/\s+/).filter(Boolean);
-    if (!scopeList.includes('offline_access')) {
-      scopeList.push('offline_access');
+    if (!validResource(body.resource)) {
+      reject(res, 'invalid_target', 'resource must identify this MCP endpoint');
+      return;
     }
-    const upstreamScope = scopeList.join(' ');
+    const upstreamScope = resolveScope(body.scope);
+    if (!upstreamScope) {
+      reject(res, 'invalid_scope', 'Requested scope is not supported');
+      return;
+    }
 
     const form = new URLSearchParams();
     form.set('client_id', upstreamClientId);
@@ -226,6 +310,7 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: form.toString(),
+        signal: AbortSignal.timeout(15_000),
       });
       const payload = await upstream.text();
       if (upstream.status >= 400) {
@@ -233,7 +318,25 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
           `Entra /devicecode returned ${upstream.status} for client=${reqClientId}: ${summarizeUpstreamError(payload)}`
         );
       } else {
-        logger.info(`OAuth /devicecode issued (client=${reqClientId}, scope=${upstreamScope})`);
+        const issued = JSON.parse(payload) as { device_code?: unknown; expires_in?: unknown };
+        if (
+          typeof issued.device_code !== 'string' ||
+          !issued.device_code ||
+          typeof issued.expires_in !== 'number' ||
+          !Number.isFinite(issued.expires_in) ||
+          issued.expires_in <= 0
+        ) {
+          throw new Error('Invalid upstream device authorization response');
+        }
+        await storage.saveTokenBinding({
+          kind: 'device',
+          tokenHash: hashClientSecret(issued.device_code),
+          clientId: reqClientId,
+          resource,
+          scope: upstreamScope,
+          expiresAt: Date.now() + Math.min(issued.expires_in, 900) * 1000,
+        });
+        logger.info('OAuth device authorization issued');
       }
       res.status(upstream.status).type('application/json').send(payload);
     } catch (error) {
@@ -254,7 +357,15 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       scope,
     } = req.query as Record<string, string | undefined>;
 
-    if (!clientId || !redirectUri || !clientChallenge) {
+    if (
+      typeof clientId !== 'string' ||
+      !clientId ||
+      typeof redirectUri !== 'string' ||
+      !redirectUri ||
+      typeof clientChallenge !== 'string' ||
+      !clientChallenge ||
+      (state !== undefined && typeof state !== 'string')
+    ) {
       logger.warn('OAuth /authorize rejected: missing client_id, redirect_uri or code_challenge');
       res.status(400).json({
         error: 'invalid_request',
@@ -262,7 +373,7 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       });
       return;
     }
-    if (clientChallengeMethod && clientChallengeMethod !== 'S256') {
+    if (clientChallengeMethod !== 'S256' || !/^[A-Za-z0-9_-]{43}$/.test(clientChallenge)) {
       logger.warn(
         `OAuth /authorize rejected: unsupported challenge method ${clientChallengeMethod}`
       );
@@ -283,23 +394,12 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       return;
     }
 
-    // SEC-F04c (SEC-002): /authorize must verify that the redirect_uri matches
-    // one of the URIs registered at /register (DCR). Without this, anyone who
-    // possesses a client_id + secret pair (e.g. recovered from a shared
-    // ~/.mcp-auth cache) can swap in an attacker-controlled redirect_uri and
-    // exfiltrate the auth code — Entra's upstream allowlist mitigates only when
-    // the operator has tightly configured their app registration. We enforce at
-    // this proxy regardless. Empty redirectUris means the client registered
-    // none (legacy / minimal DCR call) — we don't enforce in that case to keep
-    // backward compatibility with existing deployments, but log it.
-    if (known.redirectUris.length === 0) {
-      logger.warn(
-        `OAuth /authorize: client ${clientId} has no registered redirect_uris — skipping enforcement`
-      );
-    } else if (!known.redirectUris.includes(redirectUri)) {
-      logger.warn(
-        `OAuth /authorize rejected: redirect_uri ${redirectUri} not in registered list for ${clientId}`
-      );
+    // Empty legacy registrations must re-register; never skip redirect checks.
+    if (
+      !isValidRedirectUri(redirectUri) ||
+      !known.redirectUris.includes(redirectUri) ||
+      (options.allowedRedirectUris && !options.allowedRedirectUris.includes(redirectUri))
+    ) {
       res.status(400).json({
         error: 'invalid_request',
         error_description: 'redirect_uri does not match a registered URI',
@@ -307,6 +407,15 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       return;
     }
 
+    if (!validResource(req.query.resource)) {
+      reject(res, 'invalid_target', 'resource must identify this MCP endpoint');
+      return;
+    }
+    const upstreamScope = resolveScope(scope);
+    if (!upstreamScope) {
+      reject(res, 'invalid_scope', 'Requested scope is not supported');
+      return;
+    }
     const serverVerifier = randomVerifier();
     const serverChallenge = sha256Base64url(serverVerifier);
     await storage.savePkce({
@@ -321,19 +430,10 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       // the audit logs, which is otherwise impossible across the PKCE bridge.
       // Optional: clients may omit state per RFC 6749 §10.12.
       clientState: state,
+      resource,
+      scope: upstreamScope,
       expiresAt: Date.now() + PKCE_TTL_MS,
     });
-
-    // Entra only issues a refresh token when offline_access is in the requested
-    // scope. MCP clients (Claude Desktop, claude.ai, etc.) often send their own
-    // scope list that omits it — without this merge, access tokens expire after
-    // 60-90 min and users re-authenticate on every call. See Softeria PR #407.
-    const requestedScope = scope || fallbackScope;
-    const scopeList = requestedScope.split(/\s+/).filter(Boolean);
-    if (!scopeList.includes('offline_access')) {
-      scopeList.push('offline_access');
-    }
-    const upstreamScope = scopeList.join(' ');
 
     const upstream = new URL(`${authority}/oauth2/v2.0/authorize`);
     upstream.searchParams.set('client_id', upstreamClientId);
@@ -384,6 +484,13 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       return;
     }
 
+    if (!validResource(body.resource)) {
+      reject(res, 'invalid_target', 'resource must identify this MCP endpoint');
+      return;
+    }
+    let grantedScope: string;
+    let grantExpiresAt = Date.now() + REFRESH_TTL_MS;
+    let deviceHash: string | undefined;
     const form = new URLSearchParams();
     form.set('client_id', upstreamClientId);
     if (upstreamClientSecret) form.set('client_secret', upstreamClientSecret);
@@ -393,7 +500,14 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       const clientVerifier = body.code_verifier as string | undefined;
       const redirectUri = body.redirect_uri as string | undefined;
 
-      if (!code || !clientVerifier || !redirectUri) {
+      if (
+        typeof code !== 'string' ||
+        !code ||
+        typeof clientVerifier !== 'string' ||
+        !/^[A-Za-z0-9._~-]{43,128}$/.test(clientVerifier) ||
+        typeof redirectUri !== 'string' ||
+        !redirectUri
+      ) {
         res.status(400).json({
           error: 'invalid_request',
           error_description: 'Missing code, code_verifier, or redirect_uri',
@@ -413,7 +527,7 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
       // SEC-F04b: a client cannot redeem a code obtained under a different
       // client_id. This prevents a compromised client from redeeming another
       // client's auth code even if it races the PKCE consumption.
-      if (bridge.clientId !== reqClientId) {
+      if (bridge.clientId !== reqClientId || bridge.resource !== resource) {
         logger.warn(
           `OAuth /token rejected: client_id mismatch (bridge=${bridge.clientId}, req=${reqClientId})`
         );
@@ -446,51 +560,74 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
         `OAuth /token authorization_code redemption (client=${reqClientId}, state=${bridge.clientState ?? '(none)'})`
       );
 
+      grantedScope = resolveScope(body.scope, bridge.scope ?? '') ?? '';
+      if (!grantedScope) {
+        reject(res, 'invalid_scope', 'Scope exceeds the authorization grant');
+        return;
+      }
+      form.set('scope', grantedScope);
       form.set('grant_type', 'authorization_code');
       form.set('code', code);
       form.set('redirect_uri', bridge.redirectUri);
       form.set('code_verifier', bridge.serverVerifier);
     } else if (grantType === 'refresh_token') {
       const refreshToken = body.refresh_token as string | undefined;
-      if (!refreshToken) {
+      if (typeof refreshToken !== 'string' || !refreshToken) {
         res
           .status(400)
           .json({ error: 'invalid_request', error_description: 'Missing refresh_token' });
         return;
       }
+      const tokenHash = hashClientSecret(refreshToken);
+      const binding = await storage.getTokenBinding('refresh', tokenHash, reqClientId, resource);
+      if (!binding) {
+        reject(
+          res,
+          'invalid_grant',
+          'Refresh token is unknown, expired, or belongs to another client'
+        );
+        return;
+      }
+      grantedScope = resolveScope(body.scope, binding.scope) ?? '';
+      if (!grantedScope) {
+        reject(res, 'invalid_scope', 'Scope exceeds the authorization grant');
+        return;
+      }
+      // One-shot across replicas. An upstream failure requires a new sign-in;
+      // do not restore a token whose upstream redemption outcome is uncertain.
+      if (!(await storage.consumeTokenBinding('refresh', tokenHash, reqClientId, resource))) {
+        reject(res, 'invalid_grant', 'Refresh token has already been redeemed');
+        return;
+      }
+      grantExpiresAt = binding.expiresAt;
       form.set('grant_type', 'refresh_token');
       form.set('refresh_token', refreshToken);
-      // Refresh-token scope strategy depends on whether a dedicated OAuth client app
-      // is configured (see upstreamClientId / separateOAuthClient above).
-      //
-      // - Separate client app (preferred): client != resource, so we request the
-      //   resource per-scope `api://{clientId}/access_as_user`. No self-reference, so
-      //   no AADSTS90009, and the issued token carries `access_as_user` — letting
-      //   SEC-F03 stay enabled.
-      //
-      // - Self-resource fallback (no oauthClientId): the app is BOTH client and
-      //   resource. Entra rejects `refresh_token` for that self-reference unless the
-      //   resource is named by its GUID-based app identifier with /.default:
-      //   "Application is requesting a token for itself ... supported only if resource
-      //   is specified using the GUID based App Identifier." Forwarding the per-scope
-      //   value or omitting scope both fail (confirmed in prod). `{clientId}/.default`
-      //   works but the token then carries Graph delegated scopes (not access_as_user),
-      //   so SEC-F03 must be disabled in that mode. offline_access keeps the RT rotating.
-      if (separateOAuthClient) {
-        form.set('scope', `api://${options.clientId}/access_as_user offline_access`);
-      } else {
-        form.set('scope', `${options.clientId}/.default offline_access`);
-      }
+      form.set('scope', grantedScope);
     } else if (grantType === DEVICE_CODE_GRANT) {
       // RFC 8628 §3.4: token redemption for a device_code. Entra returns
       // authorization_pending / slow_down / expired_token / access_denied
       // as standard OAuth errors with 4xx status — we relay them verbatim so
       // the client-side poller can honour them.
       const deviceCode = body.device_code as string | undefined;
-      if (!deviceCode) {
+      if (typeof deviceCode !== 'string' || !deviceCode) {
         res
           .status(400)
           .json({ error: 'invalid_request', error_description: 'Missing device_code' });
+        return;
+      }
+      deviceHash = hashClientSecret(deviceCode);
+      const binding = await storage.getTokenBinding('device', deviceHash, reqClientId, resource);
+      if (!binding) {
+        reject(
+          res,
+          'invalid_grant',
+          'Device code is unknown, expired, or belongs to another client'
+        );
+        return;
+      }
+      grantedScope = resolveScope(body.scope, binding.scope) ?? '';
+      if (!grantedScope) {
+        reject(res, 'invalid_scope', 'Scope exceeds the authorization grant');
         return;
       }
       form.set('grant_type', DEVICE_CODE_GRANT);
@@ -502,6 +639,7 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
 
     try {
       const upstream = await fetch(`${authority}/oauth2/v2.0/token`, {
+        signal: AbortSignal.timeout(15_000),
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: form.toString(),
@@ -513,7 +651,33 @@ export function registerOAuthRoutes(app: Express, options: OAuthProxyOptions): v
           `Entra /token returned ${upstream.status} for grant_type=${grantType}: ${summarizeUpstreamError(payload)}`
         );
       } else {
-        logger.info(`Entra /token exchange ok (grant_type=${grantType}, client=${reqClientId})`);
+        const issued = JSON.parse(payload) as { access_token?: unknown; refresh_token?: unknown };
+        if (
+          typeof issued.access_token !== 'string' ||
+          !issued.access_token ||
+          (issued.refresh_token !== undefined &&
+            (typeof issued.refresh_token !== 'string' || !issued.refresh_token))
+        ) {
+          throw new Error('Invalid upstream token response');
+        }
+        if (
+          deviceHash &&
+          !(await storage.consumeTokenBinding('device', deviceHash, reqClientId, resource))
+        ) {
+          reject(res, 'invalid_grant', 'Device code has already been redeemed');
+          return;
+        }
+        if (typeof issued.refresh_token === 'string') {
+          await storage.saveTokenBinding({
+            kind: 'refresh',
+            tokenHash: hashClientSecret(issued.refresh_token),
+            clientId: reqClientId,
+            resource,
+            scope: grantedScope,
+            expiresAt: grantExpiresAt,
+          });
+        }
+        logger.info('Entra token exchange completed');
       }
       res.status(upstream.status).type('application/json').send(payload);
     } catch (error) {

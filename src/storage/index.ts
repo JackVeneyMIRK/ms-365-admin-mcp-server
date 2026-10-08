@@ -2,7 +2,7 @@ import logger from '../logger.js';
 import { MemoryStorage } from './memory-storage.js';
 import type { OAuthStorage } from './oauth-storage.js';
 
-export type { OAuthStorage, PkceEntry, RegisteredClient } from './oauth-storage.js';
+export type { OAuthStorage, PkceEntry, RegisteredClient, TokenBinding } from './oauth-storage.js';
 export { hashClientSecret, verifyClientSecret } from './oauth-storage.js';
 export { MemoryStorage } from './memory-storage.js';
 

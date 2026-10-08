@@ -28,6 +28,8 @@ async function buildServer(): Promise<{ url: string; server: Server }> {
     tenantId: TENANT,
     clientId: CLIENT_ID,
     clientSecret: 'upstream-entra-secret',
+    oauthClientId: '33333333-3333-3333-3333-333333333333',
+    oauthClientSecret: 'upstream-oauth-secret',
     scopes: ['openid', 'profile', 'email', 'offline_access', `api://${CLIENT_ID}/access_as_user`],
     enableDynamicRegistration: true,
     storage: new MemoryStorage(),

@@ -1,5 +1,7 @@
 # HTTP Transport and Remote Deployment
 
+> For OAuth deployments, use the current [Coolify/Intune OAuth setup](COOLIFY_INTUNE_READ_ONLY.md): a separate confidential OAuth client app is required. The single-app workaround that accepts Microsoft Graph audience tokens is no longer supported. The locked Intune profile also requires exact approved callbacks and the MCP resource parameter. Older examples below describe general-purpose transport configurations, not this restricted deployment profile.
+
 The server supports two transports:
 
 - **stdio** (default) — the MCP client spawns the server as a subprocess over stdin/stdout. Best for Claude Desktop, Claude Code, and local agents.

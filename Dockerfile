@@ -1,11 +1,11 @@
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run generate && npm run build
 
-FROM node:20-slim
+FROM node:22-slim
 WORKDIR /app
 RUN addgroup --system --gid 1001 mcpgroup && \
     adduser --system --uid 1001 --ingroup mcpgroup mcpuser

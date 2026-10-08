@@ -16,6 +16,19 @@ export interface PkceEntry {
   // Optional: clients may omit 'state' — its absence is not itself an issue,
   // RFC 6749 §10.12 only RECOMMENDS it.
   clientState?: string;
+  resource?: string;
+  scope?: string;
+  expiresAt: number;
+}
+
+// Store only digests, never upstream refresh tokens or device codes. A grant
+// belongs to one downstream client and one protected resource.
+export interface TokenBinding {
+  kind: 'refresh' | 'device';
+  tokenHash: string;
+  clientId: string;
+  resource: string;
+  scope: string;
   expiresAt: number;
 }
 
@@ -33,6 +46,21 @@ export interface OAuthStorage {
   consumePkce(clientChallenge: string): Promise<PkceEntry | null>;
   saveClient(client: RegisteredClient): Promise<void>;
   getClient(clientId: string): Promise<RegisteredClient | null>;
+  saveTokenBinding(binding: TokenBinding): Promise<void>;
+  getTokenBinding(
+    kind: TokenBinding['kind'],
+    tokenHash: string,
+    clientId: string,
+    resource: string
+  ): Promise<TokenBinding | null>;
+  // Check ownership before deleting, atomically. Another client cannot consume
+  // a grant, and concurrent refreshes cannot both reach the upstream server.
+  consumeTokenBinding(
+    kind: TokenBinding['kind'],
+    tokenHash: string,
+    clientId: string,
+    resource: string
+  ): Promise<TokenBinding | null>;
 }
 
 export function hashClientSecret(secret: string): string {

@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Node 18 dropped — ESLint 10 requires Node ^20.18.0 || ^22.10.0 || >=24.
-        node-version: [20, 22]
+        # Supported LTS lines; Node 20 is end-of-life.
+        node-version: [22, 24]
     steps:
       - uses: actions/checkout@v7
 
