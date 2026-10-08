@@ -31,6 +31,9 @@ describe('read-only Intune Settings Catalog tools', () => {
     expect(source).toContain('deviceSettingStateSummaries');
     expect(source).toContain('policyId: uuid');
     expect(source).toContain('deviceId: uuid');
+    expect(source).toContain('userId: uuid');
+    expect(source).toContain("const userId = String(params.userId ?? '');");
+    expect(source).toContain("(UserId eq '${userId}')");
     expect(source).toContain('JSON.stringify(reportBody)');
     expect(source).toContain("orderBy: ['SettingName']");
     expect(source).not.toContain("UserId eq '00000000-0000-0000-0000-000000000000'");
