@@ -27,7 +27,10 @@ describe('read-only Intune Settings Catalog tools', () => {
     expect(source).toContain("method: tool.reportAction ? 'POST' : 'GET'");
     expect(source).toContain('getConfigurationPolicyNonComplianceReport');
     expect(source).toContain('getConfigurationSettingNonComplianceReport');
-    expect(source).toContain('JSON.stringify({ select: [], skip: 0, top: 50 })');
+    expect(source).toContain('name: tool.reportName, skip: 0, top: 50');
+    expect(source).toContain("reportName: 'ConfigurationPolicyNonComplianceReport'");
+    expect(source).toContain("reportName: 'ConfigurationSettingNonComplianceReport'");
+    expect(source).not.toContain('select: []');
     expect(source).toContain("apiVersion: 'beta'");
     expect(source).toContain("apiVersion: 'v1.0'");
     expect(source).toContain("apiVersion: tool.apiVersion ?? 'beta'");
