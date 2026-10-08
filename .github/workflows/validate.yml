@@ -41,3 +41,28 @@ jobs:
             exit 1
           fi
           [[ "$output" == *"Deployment profile requires MS365_ADMIN_MCP_TENANT_ID"* ]]
+      - name: Smoke test isolated container with synthetic configuration
+        run: |
+          container=$(docker run --detach --network none \
+            -e MS365_ADMIN_MCP_DEPLOYMENT_PROFILE=intune-read-only \
+            -e MS365_ADMIN_MCP_TENANT_ID=11111111-1111-1111-1111-111111111111 \
+            -e MS365_ADMIN_MCP_CLIENT_ID=22222222-2222-2222-2222-222222222222 \
+            -e MS365_ADMIN_MCP_OAUTH_CLIENT_ID=33333333-3333-3333-3333-333333333333 \
+            -e MS365_ADMIN_MCP_AUTHORIZED_USER_OIDS=44444444-4444-4444-4444-444444444444 \
+            -e MS365_ADMIN_MCP_CLIENT_SECRET=test-resource-secret \
+            -e MS365_ADMIN_MCP_OAUTH_CLIENT_SECRET=test-oauth-secret \
+            -e MS365_ADMIN_MCP_PUBLIC_URL=https://mcp.example.com \
+            -e MS365_ADMIN_MCP_OAUTH_REDIRECT_URIS=https://chatgpt.com/connector/oauth/test-only \
+            ms365-admin-mcp:validation)
+          trap 'docker logs "$container"; docker rm -f "$container" >/dev/null' EXIT
+          docker exec "$container" node --input-type=module -e '
+            let healthy = false;
+            for (let i = 0; i < 20; i++) {
+              try { healthy = (await fetch("http://127.0.0.1:8080/health")).ok; } catch {}
+              if (healthy) break;
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            if (!healthy) throw new Error("Container never became healthy");
+            const denied = await fetch("http://127.0.0.1:8080/mcp", { method: "POST" });
+            if (denied.status !== 401) throw new Error("Unauthenticated MCP request was not rejected");
+          '
