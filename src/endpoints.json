@@ -4712,7 +4712,8 @@
   {
     "pathPattern": "/copilot/reports/getMicrosoft365CopilotUsageUserDetail(period='{period}')",
     "method": "get",
-    "toolName": "get-copilot-usage-user-detail",\n    "disabled": true,
+    "toolName": "get-copilot-usage-user-detail",
+    "disabled": true,
     "appPermissions": ["Reports.Read.All"],
     "llmTip": "Gets per-user Microsoft 365 Copilot usage detail over a period — for adoption tracking and license utilization analysis. period: 'D7' | 'D30' | 'D90' | 'D180'. Returns one row per user (UPN, display name, last activity date, last activity dates per Copilot-enabled app: Outlook, Teams, Word, Excel, PowerPoint, OneNote, Loop, M365 Chat). Useful for: identifying inactive license assignments (Copilot license costs ~$30 USD/user/month → ROI analysis), spotting power users vs dormant, planning training rollouts. Anonymized at the org level if 'Display concealed names in reports' is enabled in admin center."
   },
