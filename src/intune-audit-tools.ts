@@ -126,7 +126,7 @@ const tools: ReadTool[] = [
     name: 'get-intune-configuration-policy-noncompliance-report',
     description:
       'Read configuration policy noncompliance reports; fixed Microsoft Graph report action only.',
-    schema: {},
+    schema: { diagnosticVariant: z.enum(['minimal', 'named', 'namedWithSelect']).default('minimal') },
     path: () => '/deviceManagement/reports/getConfigurationPolicyNonComplianceReport',
     reportName: 'ConfigurationPolicyNonComplianceReport',
     apiVersion: 'v1.0',
@@ -136,7 +136,7 @@ const tools: ReadTool[] = [
     name: 'get-intune-configuration-setting-noncompliance-report',
     description:
       'Read configuration setting noncompliance reports including conflict details; no writes.',
-    schema: {},
+    schema: { diagnosticVariant: z.enum(['minimal', 'named', 'namedWithSelect']).default('minimal') },
     path: () => '/deviceManagement/reports/getConfigurationSettingNonComplianceReport',
     reportName: 'ConfigurationSettingNonComplianceReport',
     apiVersion: 'v1.0',
@@ -181,11 +181,16 @@ export function registerIntuneAuditTools(
         openWorldHint: true,
       },
       async (params) => {
+        const variant = params.diagnosticVariant ?? 'minimal';
+        const reportBody =
+          variant === 'namedWithSelect'
+            ? { name: tool.reportName, select: ['PolicyId'], skip: 0, top: 50 }
+            : variant === 'named'
+              ? { name: tool.reportName, skip: 0, top: 50 }
+              : { skip: 0, top: 50 };
         const result = await graphClient.graphRequest(tool.path(params), {
           method: tool.reportAction ? 'POST' : 'GET',
-          ...(tool.reportAction
-            ? { body: JSON.stringify({ name: tool.reportName, skip: 0, top: 50 }) }
-            : {}),
+          ...(tool.reportAction ? { body: JSON.stringify(reportBody) } : {}),
           apiVersion: tool.apiVersion ?? 'beta',
         });
         return wrapUntrustedContent(result, tool.name);
