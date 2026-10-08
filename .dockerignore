@@ -13,6 +13,8 @@ coverage
 .idea
 .vscode-test
 .token-cache.json
+*.sqlite
+*.sqlite-*
 .mcp.json
 CLAUDE.md
 README.md

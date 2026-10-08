@@ -21,6 +21,10 @@ src/generated/client.ts
 # Token cache
 .token-cache.json
 
+# Persistent OAuth state (including SQLite journals)
+*.sqlite
+*.sqlite-*
+
 # IDE
 .idea
 .vscode-test

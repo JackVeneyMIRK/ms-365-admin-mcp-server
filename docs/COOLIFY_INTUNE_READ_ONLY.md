@@ -87,12 +87,70 @@ rejected in every mode. OAuth scopes are restricted to this API plus OIDC scopes
   refresh rotation and cross-client rejection. Exercise actual ChatGPT/Codex sign-in
   and refresh with the configured callback before calling the integration complete.
 
-Memory storage is single-process. A restart loses client registrations and grant
-bindings: old refresh tokens are rejected and clients must register/sign in again.
-For persistence, configure the existing Azure Table backend separately and verify
-access controls plus restart behavior. Table storage contains hashes of upstream
-refresh/device tokens, not the tokens themselves. Expired binding rows require
-periodic storage maintenance; they are always rejected even before cleanup.
+### Persistent OAuth storage
+
+For a single Coolify replica, configure **both** of the following before the next
+approved deployment:
+
+| Setting                           | Value                                           |
+| --------------------------------- | ----------------------------------------------- |
+| Runtime environment variable      | `OAUTH_SQLITE_PATH=/data/oauth.sqlite`          |
+| Persistent Storage → Volume Mount | Name: `oauth-state`; Destination Path: `/data`  |
+| Container user                    | Existing `mcpuser`, UID/GID `1001:1001`         |
+| Directory / file permissions      | `/data`: `0700`; database and sidecars: `0600`  |
+| Replicas                          | One, on the same server with local disk storage |
+
+Use the repository Dockerfile with Node 22.13+ (or Node 24). SQLite uses Node's
+built-in `node:sqlite` module, which is experimental in Node 22 and may emit an
+experimental warning. The image prepares `/data` with the service user's ownership
+and `0700` permissions. A new, empty Docker named volume inherits that directory's
+ownership. Reuse the **same named volume** on subsequent deployments. Mount the
+whole directory, not just the database: SQLite also writes `oauth.sqlite-wal` and
+`oauth.sqlite-shm`. Do not add `OAUTH_SQLITE_PATH` as a build argument.
+
+For an existing volume or a host directory bind mount, an administrator must first
+make the dedicated directory owned by `1001:1001` with mode `0700`, and any existing
+SQLite database/sidecars owned by `1001:1001` with mode `0600`. The process stays
+non-root and fails startup on inaccessible, foreign-owned, symlinked or corrupt
+storage. It does not repair ownership by escalating privileges or silently switch
+to memory. Windows development requires a user-private directory ACL; POSIX modes
+are enforced and tested in the Linux container.
+
+Leave `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_CONNECTION_STRING` unset when
+selecting SQLite. Configuring either alongside `OAUTH_SQLITE_PATH` fails startup
+to prevent accidentally using the wrong database. Existing Azure Table storage
+remains available when `OAUTH_SQLITE_PATH` is unset, including managed identity,
+connection strings, and `AZURE_STORAGE_TABLE_NAME`. With no storage configuration,
+the existing memory backend remains the default.
+
+SQLite stores registered clients (secret hashes, approved redirects, creation
+time), PKCE bridges (including the upstream verifier and expiration), and token
+bindings (only refresh/device token digests, client/resource/scope and expiration).
+Treat the database and backups as sensitive OAuth state. Registrations have no
+automatic expiry, consistent with the existing backends. Expired PKCE and token
+bindings are always rejected; they are pruned at startup and when saving a PKCE
+bridge or token binding. Read-only/idle stores may retain expired rows until then.
+PKCE and token consumption are atomic across connections; consumed grants remain
+consumed after restart. This does not extend the existing session deadlines.
+
+The first switch from memory cannot recover registrations or grants already lost
+at restart. Recreate the client connection/register and sign in once after enabling
+persistence; later restarts preserve those new registrations. There is no automatic
+migration between memory, Azure Table and SQLite. Never restore an old live database
+snapshot casually: it can resurrect consumed grants. For backups, stop the service
+and copy the entire directory, or use a SQLite-consistent backup procedure. Keep
+backups private and off-host, and require fresh sign-in after disaster recovery.
+
+Use local disk; do not share a WAL database through NFS/SMB or between deployment
+servers. Use Azure Table for distributed deployments. See
+[Coolify storage mounts](https://coolify.io/docs/core/persistent-storage/storage-mounts/overview)
+for volume versus directory mount behavior. CI tests an unpublished image as UID
+1001 with synthetic state, no network, and three replacement containers sharing
+one volume. It does not deploy or access tenant credentials.
+
+Memory storage is single-process: restart loses registrations and grant bindings.
+Azure Table expired binding rows require periodic storage maintenance; expired
+grants are rejected even before cleanup.
 
 Refresh tokens have a local 24-hour session limit and are consumed atomically before
 exchange; rotations retain that original deadline. An upstream timeout or failure

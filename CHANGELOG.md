@@ -8,6 +8,10 @@ Tool counts in parentheses indicate the cumulative total after the change.
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in SQLite OAuth persistence with `OAUTH_SQLITE_PATH=/data/oauth.sqlite`: retain registered clients, PKCE bridges and token bindings across restarts, with atomic consumption, expiry checks, private file permissions and non-root Coolify volume guidance. Existing memory and Azure Table backends remain available.
+
 ### Security
 
 - Bind OAuth refresh tokens and device codes to their original downstream client and resource, enforce one-shot refresh rotation, and reject unapproved redirects and scope escalation. OAuth now requires a separate confidential client app; the single-app/Graph-audience workaround and empty redirect registrations are no longer supported. Existing clients must sign in again.
