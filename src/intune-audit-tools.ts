@@ -65,14 +65,16 @@ const tools: ReadTool[] = [
   },
   {
     name: 'list-intune-device-configurations',
-    description: 'Read Intune legacy device configuration profiles (distinct from Settings Catalog).',
+    description:
+      'Read Intune legacy device configuration profiles (distinct from Settings Catalog).',
     schema: {},
     path: () => '/deviceManagement/deviceConfigurations',
     apiVersion: 'v1.0',
   },
   {
     name: 'list-intune-device-encryption-states',
-    description: 'Read device encryption status summaries; does not retrieve BitLocker recovery keys.',
+    description:
+      'Read device encryption status summaries; does not retrieve BitLocker recovery keys.',
     schema: {},
     path: () => '/deviceManagement/managedDeviceEncryptionStates',
     apiVersion: 'beta',
