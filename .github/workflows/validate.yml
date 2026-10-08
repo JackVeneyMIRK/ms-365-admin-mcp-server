@@ -22,6 +22,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Generate Microsoft Graph client
+        run: npm run generate
       - name: TypeScript build
         run: npm run build
       - name: Lint
