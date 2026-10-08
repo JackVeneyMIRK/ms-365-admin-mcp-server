@@ -29,12 +29,15 @@ describe('read-only Intune Settings Catalog tools', () => {
     expect(source).toContain('getConfigurationSettingNonComplianceReport');
     expect(source).toContain('deviceConfigurationDeviceStateSummaries');
     expect(source).toContain('deviceSettingStateSummaries');
-    expect(source).toContain("z.enum(['minimal', 'named', 'namedWithSelect'])");
+    expect(source).toContain('policyId: uuid');
+    expect(source).toContain('deviceId: uuid');
     expect(source).toContain('JSON.stringify(reportBody)');
-    expect(source).toContain("variant === 'namedWithSelect'");
+    expect(source).toContain("orderBy: ['SettingName']");
+    expect(source).toContain("'PolicyStatus'");
+    expect(source).toContain("apiVersion: 'beta'");
     expect(source).toContain("reportName: 'ConfigurationPolicyNonComplianceReport'");
     expect(source).toContain("reportName: 'ConfigurationSettingNonComplianceReport'");
-    expect(source).not.toContain('select: []');
+    expect(source).toContain('select: []');
     expect(source).toContain("apiVersion: 'beta'");
     expect(source).toContain("apiVersion: 'v1.0'");
     expect(source).toContain("apiVersion: tool.apiVersion ?? 'beta'");
