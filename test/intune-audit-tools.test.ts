@@ -33,6 +33,7 @@ describe('read-only Intune Settings Catalog tools', () => {
     expect(source).toContain('deviceId: uuid');
     expect(source).toContain('JSON.stringify(reportBody)');
     expect(source).toContain("orderBy: ['SettingName']");
+    expect(source).not.toContain("UserId eq '00000000-0000-0000-0000-000000000000'");
     expect(source).toContain("'PolicyStatus'");
     expect(source).toContain("apiVersion: 'beta'");
     expect(source).toContain("reportName: 'ConfigurationPolicyNonComplianceReport'");
