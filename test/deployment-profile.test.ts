@@ -15,7 +15,7 @@ const env = {
 };
 
 describe('locked Intune deployment profile', () => {
-  it('restricts exposure to the fifteen approved Intune audit tools', () => {
+  it('restricts exposure to the seventeen approved Intune audit tools', () => {
     const allowed = [
       'list-intune-settings-catalog-policies',
       'get-intune-settings-catalog-policy',
@@ -30,6 +30,8 @@ describe('locked Intune deployment profile', () => {
       'list-intune-legacy-policy-setting-statuses',
       'list-intune-compliance-policy-assignments',
       'list-intune-compliance-policy-device-statuses',
+      'list-intune-compliance-setting-status-summaries',
+      'get-intune-device-configuration-status-summary',
       'get-intune-configuration-policy-noncompliance-report',
       'get-intune-configuration-setting-noncompliance-report',
     ];
