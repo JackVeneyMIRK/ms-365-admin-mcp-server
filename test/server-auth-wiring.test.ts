@@ -56,7 +56,7 @@ describe('HTTP server authorization wiring', () => {
     config.createServer('user-token', ['MCP.Write.Low']);
     expect(create).toHaveBeenLastCalledWith('user-token', ['MCP.Write.Low']);
   });
-  it('registers exactly the eight audit tools for the locked filter', async () => {
+  it('registers exactly the fifteen audit tools for the locked filter', async () => {
     const register = vi.spyOn(McpServer.prototype, 'tool');
     const server = new AdminGraphServer({} as AuthManager, {
       readOnly: true,
@@ -64,10 +64,17 @@ describe('HTTP server authorization wiring', () => {
     });
     await server.initialize('test');
     expect(register.mock.calls.map((call) => call[0]).sort()).toEqual([
+      'get-intune-configuration-policy-noncompliance-report',
+      'get-intune-configuration-setting-noncompliance-report',
       'get-intune-settings-catalog-policy',
+      'list-intune-compliance-policy-assignments',
+      'list-intune-compliance-policy-device-statuses',
       'list-intune-device-compliance-policies',
       'list-intune-device-configurations',
       'list-intune-device-encryption-states',
+      'list-intune-legacy-policy-assignments',
+      'list-intune-legacy-policy-device-statuses',
+      'list-intune-legacy-policy-setting-statuses',
       'list-intune-managed-devices',
       'list-intune-settings-catalog-assignments',
       'list-intune-settings-catalog-policies',
