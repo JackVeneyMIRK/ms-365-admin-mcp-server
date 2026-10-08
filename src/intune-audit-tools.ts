@@ -126,7 +126,9 @@ const tools: ReadTool[] = [
     name: 'get-intune-configuration-policy-noncompliance-report',
     description:
       'Read configuration policy noncompliance reports; fixed Microsoft Graph report action only.',
-    schema: { diagnosticVariant: z.enum(['minimal', 'named', 'namedWithSelect']).default('minimal') },
+    schema: {
+      diagnosticVariant: z.enum(['minimal', 'named', 'namedWithSelect']).default('minimal'),
+    },
     path: () => '/deviceManagement/reports/getConfigurationPolicyNonComplianceReport',
     reportName: 'ConfigurationPolicyNonComplianceReport',
     apiVersion: 'v1.0',
@@ -136,7 +138,9 @@ const tools: ReadTool[] = [
     name: 'get-intune-configuration-setting-noncompliance-report',
     description:
       'Read configuration setting noncompliance reports including conflict details; no writes.',
-    schema: { diagnosticVariant: z.enum(['minimal', 'named', 'namedWithSelect']).default('minimal') },
+    schema: {
+      diagnosticVariant: z.enum(['minimal', 'named', 'namedWithSelect']).default('minimal'),
+    },
     path: () => '/deviceManagement/reports/getConfigurationSettingNonComplianceReport',
     reportName: 'ConfigurationSettingNonComplianceReport',
     apiVersion: 'v1.0',
