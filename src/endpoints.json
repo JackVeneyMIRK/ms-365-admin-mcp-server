@@ -4786,6 +4786,7 @@
     "pathPattern": "/copilot/agentRegistrations",
     "method": "get",
     "toolName": "list-copilot-agent-registrations",
+    "disabled": true,
     "appPermissions": ["AgentRegistration.Read.All"],
     "apiVersion": "beta",
     "llmTip": "Lists registered Copilot agents (custom agents built via Copilot Studio or via partner integrations) in the tenant. Each has id, displayName, createdBy, sourceCreatedDateTime, sourceLastModifiedDateTime, agent card manifest. Use as the entry point for AI governance — answer 'which Copilot agents are active in our tenant?' (equivalent of OAuth app inventory but for AI agents). Supports $filter, $top, $skip. Beta-only endpoint."
