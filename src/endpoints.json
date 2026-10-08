@@ -4721,6 +4721,7 @@
     "pathPattern": "/copilot/reports/getMicrosoft365CopilotUserCountSummary(period='{period}')",
     "method": "get",
     "toolName": "get-copilot-user-count-summary",
+    "disabled": true,
     "appPermissions": ["Reports.Read.All"],
     "llmTip": "Gets the Microsoft 365 Copilot user count summary over a period (D7/D30/D90/D180). Returns active vs. total enabled counts per Copilot-integrated app. Higher-level than get-copilot-usage-user-detail — gives the top-line adoption number without per-user names. Use for executive reporting / KPI dashboards (% adoption among licensed users)."
   },
@@ -4728,6 +4729,7 @@
     "pathPattern": "/copilot/reports/getMicrosoft365CopilotUserCountTrend(period='{period}')",
     "method": "get",
     "toolName": "get-copilot-user-count-trend",
+    "disabled": true,
     "appPermissions": ["Reports.Read.All"],
     "llmTip": "Gets the Microsoft 365 Copilot user count trend (time series) over a period (D7/D30/D90/D180). Returns one data point per day with active counts per app. Use for trend reporting (week-over-week adoption growth, post-training adoption bump, Friday usage drop, etc.). Pair with get-copilot-user-count-summary (snapshot) for full adoption picture."
   },
