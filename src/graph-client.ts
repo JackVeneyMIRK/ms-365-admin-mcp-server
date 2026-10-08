@@ -93,7 +93,11 @@ class GraphClient {
     if (!response.ok) {
       const errorText = await response.text();
       // SEC-B: Log full error for debugging but return sanitized message to client
-      logger.error(`Graph API error ${response.status} on ${url.split('?')[0]}: ${errorText}`);
+      if (endpoint.startsWith('/deviceManagement/reports/')) {
+        logger.error(`Graph report error ${response.status} on ${url.split('?')[0]}`);
+      } else {
+        logger.error(`Graph API error ${response.status} on ${url.split('?')[0]}: ${errorText}`);
+      }
       let clientMessage = `Microsoft Graph API error: ${response.status} ${response.statusText}`;
       try {
         const parsed = JSON.parse(errorText) as { error?: { message?: string; code?: string } };
